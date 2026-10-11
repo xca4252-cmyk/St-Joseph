@@ -2184,7 +2184,7 @@ body{
           type="button"
           class="print-button"
           style="margin:0;width:100%;"
-          onclick="loadDashboard()"
+          onclick="refreshSATSData('dashboard')"
         >
           🔄 MUAT SEMULA
         </button>
@@ -2640,6 +2640,11 @@ body{
     Pengurusan maklumat murid
   </div>
 
+  <div style="display:flex;justify-content:flex-end;margin:10px 0 16px;">
+    <button type="button" class="print-button" onclick="refreshSATSData('students')">
+      🔄 MUAT SEMULA DATA MURID & KELAS
+    </button>
+  </div>
 
   <!-- ADD STUDENT -->
 
@@ -3187,7 +3192,15 @@ let scannerRunning = false;
 let processingScan = false;
 
 let allStudents = [];
-let allClasses = [];
+const STJOSEPH_CLASSES = [
+  "Tahun 1 Cemerlang", "Tahun 1 Gemilang",
+  "Tahun 2 Cemerlang", "Tahun 2 Gemilang",
+  "Tahun 3 Cemerlang", "Tahun 3 Gemilang",
+  "Tahun 4 Cemerlang", "Tahun 4 Gemilang",
+  "Tahun 5 Cemerlang", "Tahun 5 Gemilang",
+  "Tahun 6 Cemerlang", "Tahun 6 Gemilang"
+];
+let allClasses = STJOSEPH_CLASSES.slice();
 let selectedStudentIds = new Set();
 
 
@@ -5403,41 +5416,14 @@ function bootSATS(
   );
 
 
-  // Load only the class list during startup.
-  callSATS(
-    SATS_API +
-    "?action=getClasses",
-    function(data) {
-
-      classesDone =
-        true;
-
-      if (
-        data &&
-        data.success
-      ) {
-
-        classesOK =
-          true;
-
-        allClasses =
-          Array.isArray(
-            data.classes
-          )
-            ? data.classes
-            : [];
-
-        satsClassesReady =
-          true;
-
-        populateAllClassSelectors();
-
-      }
-
-      complete();
-
-    }
-  );
+  // Senarai kelas SJKC St Joseph Papar ditetapkan dalam HTML.
+  // Tidak bergantung pada API atau bilangan rekod murid.
+  allClasses = STJOSEPH_CLASSES.slice();
+  satsClassesReady = true;
+  classesDone = true;
+  classesOK = true;
+  populateAllClassSelectors();
+  complete();
 
 }
 
@@ -5655,83 +5641,73 @@ function applySchoolSettings(
 
 
 /* =================================================
+   REFRESH DATA
+   ================================================= */
+
+function refreshSATSData(target) {
+  const button = document.activeElement;
+  if (button && button.tagName === "BUTTON") {
+    button.disabled = true;
+    button.dataset.originalText = button.textContent;
+    button.textContent = "⏳ Memuat semula...";
+  }
+
+  // Kelas statik: tidak perlu menunggu Google Sheets untuk memaparkan nama kelas.
+  allClasses = STJOSEPH_CLASSES.slice();
+  satsClassesReady = true;
+  populateAllClassSelectors();
+
+  // Segarkan tetapan/ketersambungan API dan data murid dari backend.
+  bootSATS(true);
+  const done = function() {
+    if (button && button.tagName === "BUTTON") {
+      button.disabled = false;
+      button.textContent = button.dataset.originalText || "🔄 MUAT SEMULA";
+    }
+  };
+
+  if (target === "students") {
+    loadStudentsWithRefreshDone(done);
+  } else {
+    loadDashboard();
+    // Refresh status kelas dan murid pada dashboard juga.
+    loadStudentsWithRefreshDone(done);
+  }
+}
+
+function loadStudentsWithRefreshDone(done) {
+  loadStudentsDirectFromSheet(function(students, error) {
+    if (!error && Array.isArray(students)) {
+      allStudents = students;
+      satsStudentsReady = true;
+      selectedStudentIds.clear();
+      populateClassDropdowns();
+      populateAllClassSelectors();
+      const list = document.getElementById("studentList");
+      if (list) renderStudents(allStudents);
+      updatePrintButton(allStudents.length);
+    } else {
+      console.error("Refresh data murid gagal:", error && error.message);
+      const list = document.getElementById("studentList");
+      if (list) {
+        list.innerHTML = "<div class='card error'><strong>Data murid belum dapat dibaca.</strong><br><br>Semak deployment Apps Script dan kebenaran spreadsheet. Senarai kelas tetap masih tersedia.</div>";
+      }
+    }
+    if (typeof done === "function") done();
+  });
+}
+
+
+/* =================================================
    LOAD CLASSES
    ================================================= */
 
-function loadClasses(
-  done
-) {
-
-  if (satsClassesReady) {
-    populateAllClassSelectors();
-    if (typeof done === "function") {
-      done(allClasses);
-    }
-    return;
-  }
-
-  const addSelect = document.getElementById("studentClassInput");
-  const filterSelect = document.getElementById("studentClassFilter");
-
-  if (!addSelect || !filterSelect) return;
-
-  const url = SATS_API + "?action=getClasses";
-
-  callSATS(url, function(data) {
-
-    if (!data || !data.success) {
-      console.warn("Kelas tidak dapat dimuat:", data && data.message);
-      if (typeof done === "function") {
-        done([]);
-      }
-      return;
-    }
-
-    // Support the common backend response names.
-    allClasses =
-      data.classes ||
-      data.classList ||
-      data.classNames ||
-      [];
-
-    allClasses = allClasses
-      .map(function(item) {
-        if (typeof item === "string") return item.trim();
-        if (item && item.className) return String(item.className).trim();
-        return "";
-      })
-      .filter(Boolean);
-
-    allClasses = Array.from(new Set(allClasses))
-      .sort(function(a, b) {
-        return a.localeCompare(b, undefined, {numeric: true});
-      });
-
-    addSelect.innerHTML =
-      '<option value="">Pilih Kelas</option>' +
-      allClasses.map(function(className) {
-        return '<option value="' +
-          escapeAttribute(className) +
-          '">' +
-          escapeHtml(className) +
-          '</option>';
-      }).join("");
-
-    filterSelect.innerHTML =
-      '<option value="">Semua Kelas</option>' +
-      allClasses.map(function(className) {
-        return '<option value="' +
-          escapeAttribute(className) +
-          '">' +
-          escapeHtml(className) +
-          '</option>';
-      }).join("");
-
-    if (typeof done === "function") {
-      done(allClasses);
-    }
-
-  });
+function loadClasses(done) {
+  // Nama kelas adalah tetapan tetap sekolah; sentiasa isi dropdown tanpa menunggu API.
+  allClasses = STJOSEPH_CLASSES.slice();
+  satsClassesReady = true;
+  populateAllClassSelectors();
+  if (typeof done === "function") done(allClasses.slice());
 }
 
 
