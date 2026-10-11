@@ -2658,9 +2658,7 @@ body{
     </h3>
 
 
-    <div class="form-input" style="background:#f3f4f6;color:#4b5563;" aria-live="polite">
-      ID Murid: Dijana secara automatik oleh sistem selepas disimpan
-    </div>
+    <div class="form-input" style="background:#f5f7fa;color:#334155;" aria-live="polite">ID murid dijana secara automatik oleh sistem selepas disimpan.</div>
 
 
     <input
@@ -2689,17 +2687,16 @@ body{
       SIMPAN MURID
     </button>
 
+    <div style="margin-top:18px;padding-top:14px;border-top:1px solid #e5e7eb;">
+      <h4>Import Murid Secara Pukal (CSV)</h4>
+      <p style="font-size:13px;color:#64748b;">Lajur diperlukan: Nama, Kelas, RMT (Ya/Tidak). ID tidak perlu diisi.</p>
+      <input id="studentCsvFile" type="file" accept=".csv,text/csv" class="form-input">
+      <button type="button" class="button button-light" id="studentCsvImportButton" onclick="importStudentsFromCsv()">📥 IMPORT CSV</button>
+      <div id="studentCsvImportStatus" role="status" style="margin-top:8px;font-size:13px;"></div>
+    </div>
+
   </div>
 
-
-  <!-- IMPORT MURID SECARA PUKAL -->
-  <div class="card" id="bulkStudentImportCard">
-    <h3>📥 Import Murid Secara Pukal (CSV)</h3>
-    <p>Susunan lajur CSV: ID, Nama Murid, Kelas, RMT. Baris pertama boleh menjadi tajuk lajur.</p>
-    <input id="bulkStudentCsvFile" class="form-input" type="file" accept=".csv,text/csv">
-    <button type="button" class="button button-dark" id="bulkStudentImportButton" onclick="importStudentsBulkCsv()">IMPORT MURID</button>
-    <div id="bulkStudentImportStatus" role="status" style="margin-top:10px;"></div>
-  </div>
 
   <!-- SEARCH -->
 
@@ -2746,6 +2743,16 @@ body{
         disabled
       >
         🖨️ CETAK QR MURID
+      </button>
+
+      <button
+        type="button"
+        id="bulkDeleteStudentsButton"
+        class="print-button secondary-print-action"
+        onclick="deleteSelectedStudentsBulk()"
+        disabled
+      >
+        🗑️ PADAM MURID DIPILIH
       </button>
 
       <button
@@ -5205,50 +5212,14 @@ function callSATS(
   const timeoutId =
     setTimeout(
       function() {
-
-        if (finished) {
-          return;
-        }
-
-        if (attempt < 2) {
-
-          finished = true;
-
-          cleanup();
-
-          setTimeout(
-            function() {
-
-              callSATS(
-                url,
-                callback,
-                attempt + 1
-              );
-
-            },
-            700 * (attempt + 1)
-          );
-
-          return;
-
-        }
-
         finish({
-
           success: false,
-
           type: "timeout",
-
-          message:
-            "SATS tidak memberi respons dalam 20 saat.",
-
-          debugUrl:
-            finalUrl
-
+          message: "SATS tidak memberi respons dalam 8 saat. Cuba semula selepas memeriksa sambungan API.",
+          debugUrl: finalUrl
         });
-
       },
-      20000
+      8000
     );
 
 }
@@ -5723,125 +5694,97 @@ function loadClasses(done) {
    ================================================= */
 
 function addNewStudent() {
+  const name = document.getElementById("studentNameInput").value.trim();
+  const className = document.getElementById("studentClassInput").value.trim();
+  const rmt = document.getElementById("studentRmtInput").value || "Tidak";
+  if (!name || !className) { alert("Sila isi nama dan pilih kelas murid."); return; }
+  const button = document.querySelector("#addStudentCard .button-dark");
+  button.disabled = true;
+  const originalText = button.innerText;
+  button.innerText = "⏳ MENYIMPAN...";
+  const url = SATS_API + "?action=addStudent&id=&name=" + encodeURIComponent(name) + "&className=" + encodeURIComponent(className) + "&rmt=" + encodeURIComponent(rmt);
+  callSATS(url, function(data) {
+    button.disabled = false; button.innerText = originalText;
+    if (data && data.success) {
+      alert("Murid berjaya ditambah. ID: " + (data.id || "dijana oleh sistem"));
+      document.getElementById("studentNameInput").value = "";
+      document.getElementById("studentClassInput").value = "";
+      loadStudents();
+    } else { alert((data && data.message) || "Gagal menambah murid."); }
+  });
+}
 
-
-  // ID murid dijana di backend; pengguna tidak perlu mengisinya.
-  const id = "";
-
-  const name =
-    document
-      .getElementById(
-        "studentNameInput"
-      )
-      .value
-      .trim();
-
-
-  const className =
-    document
-      .getElementById(
-        "studentClassInput"
-      )
-      .value
-      .trim();
-
-
-  if (
-    !name ||
-    !className
-  ) {
-
-    alert(
-      "Sila lengkapkan semua maklumat murid."
-    );
-
-    return;
-
+function parseStudentCsv(text) {
+  const firstLine = String(text || "").split(/\r?\n/, 1)[0] || "";
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const semicolonCount = (firstLine.match(/;/g) || []).length;
+  const delimiter = semicolonCount > commaCount ? ";" : ",";
+  const rows = []; let row = []; let cell = ""; let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '"' && quoted && text[i+1] === '"') { cell += '"'; i++; }
+    else if (ch === '"') quoted = !quoted;
+    else if (ch === delimiter && !quoted) { row.push(cell.trim()); cell = ""; }
+    else if ((ch === '\n' || ch === '\r') && !quoted) { if (ch === '\r' && text[i+1] === '\n') i++; row.push(cell.trim()); if (row.some(v => v !== "")) rows.push(row); row=[]; cell=""; }
+    else cell += ch;
   }
+  row.push(cell.trim()); if (row.some(v => v !== "")) rows.push(row);
+  if (!rows.length) return [];
+  const norm = s => String(s || "").trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const headers = rows[0].map(norm);
+  const nameIndex = headers.findIndex(h => ["nama", "namamurid", "name", "studentname"].includes(h));
+  const classIndex = headers.findIndex(h => ["kelas", "class", "classname"].includes(h));
+  const rmtIndex = headers.findIndex(h => ["rmt", "statusrmt"].includes(h));
+  if (nameIndex < 0 || classIndex < 0) throw new Error("CSV mesti mempunyai tajuk lajur Nama dan Kelas. Lajur RMT pilihan; jika tiada, nilai Tidak digunakan.");
+  return rows.slice(1).map(r => ({name: r[nameIndex] || "", className: r[classIndex] || "", rmt: rmtIndex >= 0 ? (r[rmtIndex] || "Tidak") : "Tidak"})).filter(r => r.name || r.className);
+}
 
-
-  const button =
-    document.querySelector(
-      "#students .button-dark"
-    );
-
-
-  button.disabled =
-    true;
-
-
-  button.innerText =
-    "⏳ MENYIMPAN...";
-
-
-  const url =
-    SATS_API +
-    "?action=addStudent" +
-    "&id=" +
-    encodeURIComponent(id) +
-    "&name=" +
-    encodeURIComponent(name) +
-    "&className=" +
-    encodeURIComponent(className) +
-    "&rmt=" +
-    encodeURIComponent(document.getElementById("studentRmtInput").value || "Tidak");
-
-
-  callSATS(
-    url,
-    function(data) {
-
-      button.disabled =
-        false;
-
-
-      button.innerText =
-        "SIMPAN MURID";
-
-
-      if (
-        data.success
-      ) {
-
-        alert(
-          "✓ Murid berjaya ditambah."
-        );
-
-
-        document
-          .getElementById(
-            "studentNameInput"
-          )
-          .value = "";
-
-
-        document
-          .getElementById(
-            "studentClassInput"
-          )
-          .value = "";
-
-
-        loadStudents();
-
-
-      }
-
-      else {
-
-        alert(
-          "✕ " +
-          (
-            data.message ||
-            "Gagal menambah murid."
-          )
-        );
-
-      }
-
+function importStudentsFromCsv() {
+  const input = document.getElementById("studentCsvFile");
+  const status = document.getElementById("studentCsvImportStatus");
+  const button = document.getElementById("studentCsvImportButton");
+  const file = input && input.files && input.files[0];
+  if (!file) { alert("Pilih fail CSV dahulu."); return; }
+  const reader = new FileReader();
+  button.disabled = true; status.textContent = "Membaca fail CSV...";
+  reader.onload = function() {
+    let rows; try { rows = parseStudentCsv(String(reader.result || "").replace(/^\uFEFF/, "")); } catch (e) { status.textContent = e.message; button.disabled=false; return; }
+    if (!rows.length) { status.textContent = "Tiada baris murid untuk diimport."; button.disabled=false; return; }
+    const chunks = []; for (let i=0;i<rows.length;i+=5) chunks.push(rows.slice(i,i+5));
+    let chunkIndex=0, added=0, failed=0, errors=[];
+    function sendNext() {
+      if (chunkIndex >= chunks.length) { button.disabled=false; status.textContent = "Selesai: " + added + " berjaya, " + failed + " gagal daripada " + rows.length + " baris." + (errors.length ? " Contoh ralat: " + errors.slice(0,3).join("; ") : ""); input.value=""; loadStudents(); return; }
+      const chunk=chunks[chunkIndex++]; status.textContent = "Mengimport kelompok " + chunkIndex + "/" + chunks.length + "...";
+      const url = SATS_API + "?action=importStudentsBulk&rows=" + encodeURIComponent(JSON.stringify(chunk));
+      callSATS(url, function(data) {
+        if (!data || !data.results) { failed += chunk.length; errors.push((data && data.message) || "Respons API tidak sah"); }
+        else { added += Number(data.added || 0); failed += Number(data.failed || 0); data.results.filter(x=>!x.success).forEach(x=>errors.push("Baris " + (x.row + (chunkIndex-1)*5) + ": " + x.message)); }
+        sendNext();
+      });
     }
-  );
+    sendNext();
+  };
+  reader.onerror = function() { button.disabled=false; status.textContent="Gagal membaca fail CSV."; };
+  reader.readAsText(file, "UTF-8");
+}
 
+function deleteSelectedStudentsBulk() {
+  const ids = Array.from(selectedStudentIds);
+  if (!ids.length) { alert("Pilih murid yang hendak dipadam dahulu."); return; }
+  const names = allStudents.filter(s=>ids.includes(String(s.id))).map(s=>s.name);
+  if (!confirm("Anda akan memadam " + ids.length + " rekod induk murid daripada Data Murid. Rekod Attendance dan RMT Attendance tidak akan dipadam oleh tindakan ini. Teruskan?\n\n" + names.slice(0,8).join("\n") + (names.length>8 ? "\n..." : ""))) return;
+  const button = document.getElementById("bulkDeleteStudentsButton"); button.disabled=true; button.textContent="Memadam...";
+  const chunks=[]; for(let i=0;i<ids.length;i+=20) chunks.push(ids.slice(i,i+20));
+  let i=0, deleted=0, missing=0;
+  function next() {
+    if (i>=chunks.length) { button.disabled=true; button.textContent="🗑️ PADAM MURID DIPILIH"; selectedStudentIds.clear(); loadStudents(); alert("Pemadaman selesai. Rekod induk dipadam: " + deleted + ". ID tidak ditemui: " + missing + "."); return; }
+    const chunk=chunks[i++];
+    callSATS(SATS_API + "?action=deleteStudentsBulk&ids=" + encodeURIComponent(JSON.stringify(chunk)), function(data) {
+      if (!data || !data.success) { button.disabled=false; button.textContent="🗑️ PADAM MURID DIPILIH"; alert((data && data.message) || "Pemadaman pukal gagal. Semak data sebelum cuba semula."); return; }
+      deleted += Number(data.deleted || 0); missing += Number(data.missing || 0); next();
+    });
+  }
+  next();
 }
 
 
@@ -7080,42 +7023,6 @@ function populateClassDropdowns() {
    RENDER STUDENTS
    ================================================= */
 
-async function importStudentsBulkCsv() {
-  const fileInput = document.getElementById("bulkStudentCsvFile");
-  const button = document.getElementById("bulkStudentImportButton");
-  const status = document.getElementById("bulkStudentImportStatus");
-  const file = fileInput && fileInput.files && fileInput.files[0];
-  if (!file) { alert("Sila pilih fail CSV terlebih dahulu."); return; }
-  if (SATS_STUDENT_IMPORT_MODE) { alert("Mod import sahaja aktif; data perlu diuruskan dalam sumber asal."); return; }
-  const rows = parseStudentCsv(await file.text());
-  if (!rows.length) { alert("Fail CSV kosong atau format tidak sah."); return; }
-  const norm = v => String(v || "").replace(/^\uFEFF/, "").trim().toLowerCase();
-  let start = 0, idCol = -1, nameCol = 0, classCol = 1, rmtCol = 2;
-  const headers = rows[0].map(norm);
-  const hasHeader = headers.some(v => ["id", "id murid", "nama", "nama murid", "kelas", "rmt"].includes(v));
-  if (hasHeader) {
-    start = 1;
-    idCol = headers.findIndex(v => ["id", "id murid"].includes(v));
-    nameCol = headers.findIndex(v => ["nama", "nama murid", "name", "student name"].includes(v));
-    classCol = headers.findIndex(v => ["kelas", "class", "class name"].includes(v));
-    rmtCol = headers.findIndex(v => v === "rmt");
-    if (nameCol < 0 || classCol < 0) { alert("Tajuk CSV perlu mempunyai lajur Nama dan Kelas (RMT pilihan). ID tidak diperlukan."); return; }
-  }
-  const entries = rows.slice(start).map(row => ({id:idCol >= 0 ? String(row[idCol]||"").trim() : "", name:String(row[nameCol]||"").trim(), className:String(row[classCol]||"").trim(), rmt:rmtCol >= 0 ? String(row[rmtCol]||"Tidak").trim() : "Tidak"})).filter(x => x.name || x.className);
-  const invalid = entries.filter(x => !x.name || !x.className || !allClasses.includes(x.className));
-  if (!entries.length || invalid.length) { alert("Semak CSV: setiap baris mesti ada Nama dan Kelas yang tepat seperti senarai SATS. ID murid dijana automatik. Baris bermasalah: " + invalid.length); return; }
-  if (!confirm("Import " + entries.length + " rekod murid? ID murid akan dijana secara automatik. Rekod yang mempunyai ID sedia ada mungkin ditolak jika ID itu pendua.")) return;
-  button.disabled = true; let i=0, ok=0, fail=0;
-  function next() {
-    if (i >= entries.length) { button.disabled=false; status.textContent="Selesai — berjaya: "+ok+", gagal: "+fail; alert("Import selesai. Berjaya: "+ok+", gagal: "+fail); loadStudents(); return; }
-    const x=entries[i++];
-    const url=SATS_API+"?action=addStudent&id="+encodeURIComponent(x.id)+"&name="+encodeURIComponent(x.name)+"&className="+encodeURIComponent(x.className)+"&rmt="+encodeURIComponent(["Ya","Tidak"].includes(x.rmt)?x.rmt:"Tidak");
-    status.textContent="Memproses "+i+" / "+entries.length;
-    callSATS(url,function(data){if(data&&data.success===true)ok++;else fail++;next();});
-  }
-  next();
-}
-
 function renderStudents(
   students
 ) {
@@ -7213,10 +7120,7 @@ function renderStudents(
               "alt='QR Code'>" +
 
           "</div>" +
-          "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;'>" +
-            "<button type='button' class='button button-light' data-id='" + escapeAttribute(student.id) + "' onclick='openEditStudent(this.dataset.id)'>✏️ Edit</button>" +
-            "<button type='button' class='button button-light' style='color:#b91c1c' data-id='" + escapeAttribute(student.id) + "' onclick='deleteStudentFromApp(this.dataset.id)'>🗑️ Padam</button>" +
-          "</div>" +
+
         "</div>";
 
     }
@@ -7345,6 +7249,8 @@ function updateSelectedStudentCount() {
   const count = selectedStudentIds.size;
 
   if (button) button.disabled = count === 0;
+  const deleteButton = document.getElementById("bulkDeleteStudentsButton");
+  if (deleteButton) deleteButton.disabled = count === 0;
 
   if (text) {
     text.innerText = count
@@ -7406,6 +7312,8 @@ function updatePrintButton(count) {
   if (!button || !text) return;
 
   button.disabled = selectedStudentIds.size === 0;
+  const deleteButton = document.getElementById("bulkDeleteStudentsButton");
+  if (deleteButton) deleteButton.disabled = selectedStudentIds.size === 0;
 
   text.innerText = selectedStudentIds.size
     ? selectedStudentIds.size + " murid dipilih untuk cetakan."
