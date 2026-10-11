@@ -2694,6 +2694,15 @@ body{
   </div>
 
 
+  <!-- IMPORT MURID SECARA PUKAL -->
+  <div class="card" id="bulkStudentImportCard">
+    <h3>📥 Import Murid Secara Pukal (CSV)</h3>
+    <p>Susunan lajur CSV: ID, Nama Murid, Kelas, RMT. Baris pertama boleh menjadi tajuk lajur.</p>
+    <input id="bulkStudentCsvFile" class="form-input" type="file" accept=".csv,text/csv">
+    <button type="button" class="button button-dark" id="bulkStudentImportButton" onclick="importStudentsBulkCsv()">IMPORT MURID</button>
+    <div id="bulkStudentImportStatus" role="status" style="margin-top:10px;"></div>
+  </div>
+
   <!-- SEARCH -->
 
   <div class="card">
@@ -7087,6 +7096,33 @@ function populateClassDropdowns() {
    RENDER STUDENTS
    ================================================= */
 
+async function importStudentsBulkCsv() {
+  const fileInput = document.getElementById("bulkStudentCsvFile");
+  const button = document.getElementById("bulkStudentImportButton");
+  const status = document.getElementById("bulkStudentImportStatus");
+  const file = fileInput && fileInput.files && fileInput.files[0];
+  if (!file) { alert("Sila pilih fail CSV terlebih dahulu."); return; }
+  if (SATS_STUDENT_IMPORT_MODE) { alert("Mod import sahaja aktif; data perlu diuruskan dalam sumber asal."); return; }
+  const rows = parseStudentCsv(await file.text());
+  if (!rows.length) { alert("Fail CSV kosong atau format tidak sah."); return; }
+  const norm = v => String(v || "").replace(/^\uFEFF/, "").trim().toLowerCase();
+  let start = rows[0].some(v => ["id", "id murid", "nama", "nama murid", "kelas", "rmt"].includes(norm(v))) ? 1 : 0;
+  const entries = rows.slice(start).map(row => ({id:String(row[0]||"").trim(),name:String(row[1]||"").trim(),className:String(row[2]||"").trim(),rmt:String(row[3]||"Tidak").trim()||"Tidak"})).filter(x => x.id || x.name || x.className);
+  const invalid = entries.filter(x => !x.id || !x.name || !x.className || !allClasses.includes(x.className));
+  if (!entries.length || invalid.length) { alert("Semak CSV: setiap baris mesti ada ID, nama dan kelas yang tepat seperti senarai SATS. Baris bermasalah: " + invalid.length); return; }
+  if (!confirm("Import " + entries.length + " rekod murid? ID pendua akan ditolak.")) return;
+  button.disabled = true; let i=0, ok=0, fail=0;
+  function next() {
+    if (i >= entries.length) { button.disabled=false; status.textContent="Selesai — berjaya: "+ok+", gagal/pendua: "+fail; alert("Import selesai. Berjaya: "+ok+", gagal/pendua: "+fail); loadStudents(); return; }
+    const x=entries[i++];
+    const url=SATS_API+"?action=addStudent&id="+encodeURIComponent(x.id)+"&name="+encodeURIComponent(x.name)+"&className="+encodeURIComponent(x.className)+"&rmt="+encodeURIComponent(["Ya","Tidak"].includes(x.rmt)?x.rmt:"Tidak");
+    status.textContent="Memproses "+i+" / "+entries.length;
+    callSATS(url,function(data){if(data&&data.success===true)ok++;else fail++;next();});
+  }
+  next();
+}
+
+
 function renderStudents(
   students
 ) {
@@ -7184,7 +7220,10 @@ function renderStudents(
               "alt='QR Code'>" +
 
           "</div>" +
-
+          "<div style='display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;'>" +
+            "<button type='button' class='button button-light' data-id='" + escapeAttribute(student.id) + "' onclick='openEditStudent(this.dataset.id)'>✏️ Edit</button>" +
+            "<button type='button' class='button button-light' style='color:#b91c1c' data-id='" + escapeAttribute(student.id) + "' onclick='deleteStudentFromApp(this.dataset.id)'>🗑️ Padam</button>" +
+          "</div>" +
         "</div>";
 
     }
@@ -11373,11 +11412,4 @@ function deleteClassSetting(
     </div>
     <div id="rmtMonthlyActions" style="display:none;margin-top:12px;">
       <button type="button" class="print-button" onclick="printRmtMonthlyReport()">🖨️ CETAK / PDF</button>
-    </div>
-    <div id="rmtMonthlyPreview" style="display:none;margin-top:15px;overflow:auto;"></div>
-  </div>
-</section>
-
-</body>
-
-</html>
+    </
