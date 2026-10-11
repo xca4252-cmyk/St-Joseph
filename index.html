@@ -2658,11 +2658,9 @@ body{
     </h3>
 
 
-    <input
-      id="studentIdInput"
-      class="form-input"
-      placeholder="ID Murid"
-    >
+    <div class="form-input" style="background:#f3f4f6;color:#4b5563;" aria-live="polite">
+      ID Murid: Dijana secara automatik oleh sistem selepas disimpan
+    </div>
 
 
     <input
@@ -5727,14 +5725,8 @@ function loadClasses(done) {
 function addNewStudent() {
 
 
-  const id =
-    document
-      .getElementById(
-        "studentIdInput"
-      )
-      .value
-      .trim();
-
+  // ID murid dijana di backend; pengguna tidak perlu mengisinya.
+  const id = "";
 
   const name =
     document
@@ -5755,7 +5747,6 @@ function addNewStudent() {
 
 
   if (
-    !id ||
     !name ||
     !className
   ) {
@@ -5815,13 +5806,6 @@ function addNewStudent() {
         alert(
           "✓ Murid berjaya ditambah."
         );
-
-
-        document
-          .getElementById(
-            "studentIdInput"
-          )
-          .value = "";
 
 
         document
@@ -7106,14 +7090,24 @@ async function importStudentsBulkCsv() {
   const rows = parseStudentCsv(await file.text());
   if (!rows.length) { alert("Fail CSV kosong atau format tidak sah."); return; }
   const norm = v => String(v || "").replace(/^\uFEFF/, "").trim().toLowerCase();
-  let start = rows[0].some(v => ["id", "id murid", "nama", "nama murid", "kelas", "rmt"].includes(norm(v))) ? 1 : 0;
-  const entries = rows.slice(start).map(row => ({id:String(row[0]||"").trim(),name:String(row[1]||"").trim(),className:String(row[2]||"").trim(),rmt:String(row[3]||"Tidak").trim()||"Tidak"})).filter(x => x.id || x.name || x.className);
-  const invalid = entries.filter(x => !x.id || !x.name || !x.className || !allClasses.includes(x.className));
-  if (!entries.length || invalid.length) { alert("Semak CSV: setiap baris mesti ada ID, nama dan kelas yang tepat seperti senarai SATS. Baris bermasalah: " + invalid.length); return; }
-  if (!confirm("Import " + entries.length + " rekod murid? ID pendua akan ditolak.")) return;
+  let start = 0, idCol = -1, nameCol = 0, classCol = 1, rmtCol = 2;
+  const headers = rows[0].map(norm);
+  const hasHeader = headers.some(v => ["id", "id murid", "nama", "nama murid", "kelas", "rmt"].includes(v));
+  if (hasHeader) {
+    start = 1;
+    idCol = headers.findIndex(v => ["id", "id murid"].includes(v));
+    nameCol = headers.findIndex(v => ["nama", "nama murid", "name", "student name"].includes(v));
+    classCol = headers.findIndex(v => ["kelas", "class", "class name"].includes(v));
+    rmtCol = headers.findIndex(v => v === "rmt");
+    if (nameCol < 0 || classCol < 0) { alert("Tajuk CSV perlu mempunyai lajur Nama dan Kelas (RMT pilihan). ID tidak diperlukan."); return; }
+  }
+  const entries = rows.slice(start).map(row => ({id:idCol >= 0 ? String(row[idCol]||"").trim() : "", name:String(row[nameCol]||"").trim(), className:String(row[classCol]||"").trim(), rmt:rmtCol >= 0 ? String(row[rmtCol]||"Tidak").trim() : "Tidak"})).filter(x => x.name || x.className);
+  const invalid = entries.filter(x => !x.name || !x.className || !allClasses.includes(x.className));
+  if (!entries.length || invalid.length) { alert("Semak CSV: setiap baris mesti ada Nama dan Kelas yang tepat seperti senarai SATS. ID murid dijana automatik. Baris bermasalah: " + invalid.length); return; }
+  if (!confirm("Import " + entries.length + " rekod murid? ID murid akan dijana secara automatik. Rekod yang mempunyai ID sedia ada mungkin ditolak jika ID itu pendua.")) return;
   button.disabled = true; let i=0, ok=0, fail=0;
   function next() {
-    if (i >= entries.length) { button.disabled=false; status.textContent="Selesai — berjaya: "+ok+", gagal/pendua: "+fail; alert("Import selesai. Berjaya: "+ok+", gagal/pendua: "+fail); loadStudents(); return; }
+    if (i >= entries.length) { button.disabled=false; status.textContent="Selesai — berjaya: "+ok+", gagal: "+fail; alert("Import selesai. Berjaya: "+ok+", gagal: "+fail); loadStudents(); return; }
     const x=entries[i++];
     const url=SATS_API+"?action=addStudent&id="+encodeURIComponent(x.id)+"&name="+encodeURIComponent(x.name)+"&className="+encodeURIComponent(x.className)+"&rmt="+encodeURIComponent(["Ya","Tidak"].includes(x.rmt)?x.rmt:"Tidak");
     status.textContent="Memproses "+i+" / "+entries.length;
@@ -7121,7 +7115,6 @@ async function importStudentsBulkCsv() {
   }
   next();
 }
-
 
 function renderStudents(
   students
@@ -11412,4 +11405,11 @@ function deleteClassSetting(
     </div>
     <div id="rmtMonthlyActions" style="display:none;margin-top:12px;">
       <button type="button" class="print-button" onclick="printRmtMonthlyReport()">🖨️ CETAK / PDF</button>
-    </
+    </div>
+    <div id="rmtMonthlyPreview" style="display:none;margin-top:15px;overflow:auto;"></div>
+  </div>
+</section>
+
+</body>
+
+</html>
