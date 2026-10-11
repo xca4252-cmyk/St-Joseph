@@ -2184,7 +2184,7 @@ body{
           type="button"
           class="print-button"
           style="margin:0;width:100%;"
-          onclick="refreshSATSData('dashboard')"
+          onclick="refreshSATSData('dashboard', this)"
         >
           🔄 MUAT SEMULA
         </button>
@@ -2641,7 +2641,7 @@ body{
   </div>
 
   <div style="display:flex;justify-content:flex-end;margin:10px 0 16px;">
-    <button type="button" class="print-button" onclick="refreshSATSData('students')">
+    <button type="button" class="print-button" onclick="refreshSATSData('students', this)">
       🔄 MUAT SEMULA DATA MURID & KELAS
     </button>
   </div>
@@ -3180,8 +3180,8 @@ const SATS_API =
   "https://script.google.com/macros/s/AKfycbzOpQiYUguKliF_Kg-WaKQsldhiIu2Eek5ZfjQLfKE6DlyZqvxfl5ar-2mDM5petkKm/exec";
 
 /*
- * Sekolah ini menggunakan data murid daripada IMPORTRANGE.
- * Nama, Kelas dan RMT adalah READ-ONLY.
+ * Semua rekod murid dimasukkan melalui SATS (borang atau import CSV).
+ * ID dijana oleh backend dan nama/kelas/RMT boleh diedit melalui SATS.
  */
 const SATS_STUDENT_IMPORT_MODE = false;
 
@@ -5069,161 +5069,41 @@ function deleteSchoolCalendarEntry(rowNumber) {
    JSONP HELPER
    ================================================= */
 
-function callSATS(
-  url,
-  callback,
-  attempt
-) {
-
-  attempt =
-    Number(attempt || 0);
-
-  const callbackName =
-    "satsCallback_" +
-    Date.now() +
-    "_" +
-    Math.floor(
-      Math.random() * 1000000
-    );
-
+function callSATS(url, callback) {
+  const callbackName = "satsCallback_" + Date.now() + "_" + Math.floor(Math.random() * 1000000);
   let finished = false;
+  let timeoutId = null;
+  const script = document.createElement("script");
+  const separator = url.indexOf("?") >= 0 ? "&" : "?";
+  const finalUrl = url + separator + "callback=" + encodeURIComponent(callbackName) + "&_=" + Date.now();
 
-  const script =
-    document.createElement("script");
+  function cleanup() {
+    if (timeoutId !== null) clearTimeout(timeoutId);
+    script.onload = null;
+    script.onerror = null;
+    if (script.parentNode) script.parentNode.removeChild(script);
+    try { delete window[callbackName]; } catch (error) { window[callbackName] = undefined; }
+  }
 
-  const separator =
-    url.indexOf("?") >= 0
-      ? "&"
-      : "?";
+  function finish(data) {
+    if (finished) return;
+    finished = true;
+    cleanup();
+    if (typeof callback === "function") callback(data);
+  }
 
-  const finalUrl =
-    url +
-    separator +
-    "callback=" +
-    encodeURIComponent(
-      callbackName
-    ) +
-    "&_=" +
-    Date.now();
-
-  const cleanup =
-    function() {
-
-      if (script.parentNode) {
-        script.parentNode.removeChild(
-          script
-        );
-      }
-
-      try {
-        delete window[callbackName];
-      } catch(error) {}
-
-    };
-
-  const finish =
-    function(data) {
-
-      if (finished) {
-        return;
-      }
-
-      finished = true;
-
-      clearTimeout(
-        timeoutId
-      );
-
-      cleanup();
-
-      if (typeof callback === "function") {
-        callback(data);
-      }
-
-    };
-
-  window[callbackName] =
-    function(data) {
-      finish(data);
-    };
-
-  script.src =
-    finalUrl;
-
-  script.async =
-    true;
-
-  script.referrerPolicy =
-    "no-referrer-when-downgrade";
-
-  script.onerror =
-    function() {
-
-      if (
-        !finished &&
-        attempt < 2
-      ) {
-
-        finished = true;
-
-        clearTimeout(
-          timeoutId
-        );
-
-        cleanup();
-
-        setTimeout(
-          function() {
-
-            callSATS(
-              url,
-              callback,
-              attempt + 1
-            );
-
-          },
-          700 * (attempt + 1)
-        );
-
-        return;
-
-      }
-
-      finish({
-
-        success: false,
-
-        type: "connection",
-
-        message:
-          "Tidak dapat memuat respons SATS.",
-
-        debugUrl:
-          finalUrl
-
-      });
-
-    };
-
-  document.body.appendChild(
-    script
-  );
-
-  const timeoutId =
-    setTimeout(
-      function() {
-        finish({
-          success: false,
-          type: "timeout",
-          message: "SATS tidak memberi respons dalam 8 saat. Cuba semula selepas memeriksa sambungan API.",
-          debugUrl: finalUrl
-        });
-      },
-      8000
-    );
-
+  window[callbackName] = function(data) { finish(data); };
+  script.async = true;
+  script.referrerPolicy = "no-referrer-when-downgrade";
+  script.onerror = function() {
+    finish({ success: false, type: "connection", message: "Sambungan ke SATS gagal. Sila cuba muat semula." , debugUrl: finalUrl });
+  };
+  timeoutId = setTimeout(function() {
+    finish({ success: false, type: "timeout", message: "SATS tidak memberi respons dalam 25 saat. Semak sambungan API dan status Google Sheet sebelum mengulangi operasi.", debugUrl: finalUrl });
+  }, 25000);
+  script.src = finalUrl;
+  document.body.appendChild(script);
 }
-
 
 
 
@@ -5622,36 +5502,44 @@ function applySchoolSettings(
    REFRESH DATA
    ================================================= */
 
-function refreshSATSData(target) {
-  const button = document.activeElement;
-  if (button && button.tagName === "BUTTON") {
+function refreshSATSData(target, clickedButton) {
+  // Use the actual clicked button; document.activeElement can change during async boot.
+  const button = clickedButton || (document.activeElement && document.activeElement.tagName === "BUTTON" ? document.activeElement : null);
+  const originalText = button ? (button.dataset.originalText || button.textContent) : "🔄 MUAT SEMULA";
+  let restored = false;
+  function restoreButton() {
+    if (restored) return;
+    restored = true;
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+      delete button.dataset.originalText;
+    }
+  }
+  if (button) {
     button.disabled = true;
-    button.dataset.originalText = button.textContent;
+    button.dataset.originalText = originalText;
     button.textContent = "⏳ Memuat semula...";
   }
 
-  // Kelas statik: tidak perlu menunggu Google Sheets untuk memaparkan nama kelas.
   allClasses = STJOSEPH_CLASSES.slice();
   satsClassesReady = true;
   populateAllClassSelectors();
 
-  // Segarkan tetapan/ketersambungan API dan data murid dari backend.
-  bootSATS(true);
+  // Do not wait for the unrelated boot routine before refreshing the student list.
+  const watchdog = setTimeout(restoreButton, 9000);
   const done = function() {
-    if (button && button.tagName === "BUTTON") {
-      button.disabled = false;
-      button.textContent = button.dataset.originalText || "🔄 MUAT SEMULA";
-    }
+    clearTimeout(watchdog);
+    restoreButton();
   };
-
   if (target === "students") {
     loadStudentsWithRefreshDone(done);
   } else {
     loadDashboard();
-    // Refresh status kelas dan murid pada dashboard juga.
     loadStudentsWithRefreshDone(done);
   }
 }
+
 
 function loadStudentsWithRefreshDone(done) {
   loadStudentsDirectFromSheet(function(students, error) {
