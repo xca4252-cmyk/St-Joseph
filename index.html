@@ -6125,20 +6125,25 @@ function loadManualAttendance() {
     ) {
 
       if (
-        !Array.isArray(students) ||
-        !students.length
+        studentError ||
+        !Array.isArray(students)
       ) {
 
         body.innerHTML =
           '<tr><td colspan="7" style="padding:15px;text-align:center;color:#991b1b;">' +
           escapeHtml(
-            studentError &&
-            studentError.message
+            studentError && studentError.message
               ? studentError.message
-              : "Data Murid tidak dapat dibaca daripada Google Sheet."
+              : "Respons API SATS tidak sah."
           ) +
           "</td></tr>";
 
+        return;
+      }
+
+      if (!students.length) {
+        body.innerHTML =
+          '<tr><td colspan="7" style="padding:15px;text-align:center;">Tiada rekod murid dalam Data Murid. Tambah murid dahulu sebelum mengambil kehadiran.</td></tr>';
         return;
       }
 
@@ -7003,8 +7008,8 @@ function loadStudents() {
     ) {
 
       if (
-        !Array.isArray(students) ||
-        !students.length
+        error ||
+        !Array.isArray(students)
       ) {
 
         container.innerHTML =
@@ -7012,22 +7017,21 @@ function loadStudents() {
           "<strong>Data Murid tidak dapat dimuatkan.</strong>" +
           "<br><br>" +
           escapeHtml(
-            error &&
-            error.message
+            error && error.message
               ? error.message
-              : "Google Sheet tidak dapat dibaca oleh browser."
+              : "Respons API SATS tidak sah."
           ) +
           "<br><br>" +
           "<small>Sumber: Data Murid → " +
-          escapeHtml(
-            STUDENT_SHEET_NAME
-          ) +
+          escapeHtml(STUDENT_SHEET_NAME) +
           "</small>" +
           "</div>";
 
         return;
       }
 
+      // Empty student records are valid for a newly configured school.
+      allStudents = students;
       selectedStudentIds.clear();
 
       populateClassDropdowns();
@@ -9913,18 +9917,17 @@ function loadDashboard() {
     ) {
 
       if (
-        !Array.isArray(students) ||
-        !students.length
+        studentError ||
+        !Array.isArray(students)
       ) {
 
         if (body) {
           body.innerHTML =
             '<tr><td colspan="6" style="padding:15px;text-align:center;color:#991b1b;">' +
             escapeHtml(
-              studentError &&
-              studentError.message
+              studentError && studentError.message
                 ? studentError.message
-                : "Data Murid tidak dapat dibaca daripada Google Sheet."
+                : "Respons API SATS tidak sah."
             ) +
             "</td></tr>";
         }
@@ -9933,7 +9936,9 @@ function loadDashboard() {
       }
 
       /*
-       * Classes are derived from Column C / className.
+       * An empty student array is valid before student registration.
+       * Continue so dashboard can display zero students.
+       * Classes are derived from Column C / className when records exist.
        */
       const sheetClasses =
         Array.from(
