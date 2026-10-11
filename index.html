@@ -3201,13 +3201,28 @@ let processingScan = false;
 
 let allStudents = [];
 const STJOSEPH_CLASSES = [
-  "Tahun 1 Cemerlang", "Tahun 1 Gemilang",
-  "Tahun 2 Cemerlang", "Tahun 2 Gemilang",
-  "Tahun 3 Cemerlang", "Tahun 3 Gemilang",
-  "Tahun 4 Cemerlang", "Tahun 4 Gemilang",
-  "Tahun 5 Cemerlang", "Tahun 5 Gemilang",
-  "Tahun 6 Cemerlang", "Tahun 6 Gemilang"
+  "1 CEMERLANG", "1 GEMILANG",
+  "2 CEMERLANG", "2 GEMILANG",
+  "3 CEMERLANG", "3 GEMILANG",
+  "4 CEMERLANG", "4 GEMILANG",
+  "5 CEMERLANG", "5 GEMILANG",
+  "6 CEMERLANG", "6 GEMILANG"
 ];
+
+// Normalize legacy class labels for display/filtering without changing history records.
+function normalizeSatsClassName(value) {
+  const current = String(value || "").trim().toUpperCase().replace(/\\s+/g, " ");
+  const match = current.match(/^(?:TAHUN\\s*)?([1-6])\\s+(CEMERLANG|GEMILANG)$/);
+  return match ? match[1] + " " + match[2] : String(value || "").trim();
+}
+
+function normalizeSatsStudents(students) {
+  return (Array.isArray(students) ? students : []).map(function(student) {
+    return Object.assign({}, student, {
+      className: normalizeSatsClassName(student && student.className)
+    });
+  });
+}
 let allClasses = STJOSEPH_CLASSES.slice();
 let selectedStudentIds = new Set();
 
@@ -5538,7 +5553,7 @@ function refreshSATSData(target, clickedButton) {
 function loadStudentsWithRefreshDone(done) {
   loadStudentsDirectFromSheet(function(students, error) {
     if (!error && Array.isArray(students)) {
-      allStudents = students;
+      allStudents = normalizeSatsStudents(students);
       satsStudentsReady = true;
       selectedStudentIds.clear();
       populateClassDropdowns();
@@ -6436,9 +6451,7 @@ function applyStudentData(
             ).trim(),
 
           className:
-            String(
-              student.className || ""
-            ).trim(),
+            normalizeSatsClassName(student.className),
 
           rmt:
             String(
@@ -6773,7 +6786,7 @@ function loadStudents() {
       }
 
       // Empty student records are valid for a newly configured school.
-      allStudents = students;
+      allStudents = normalizeSatsStudents(students);
       selectedStudentIds.clear();
 
       populateClassDropdowns();
