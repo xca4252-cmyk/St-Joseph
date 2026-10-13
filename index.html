@@ -2045,14 +2045,19 @@ body{
 
 <style id="sats-global-refresh-style">
 #satsGlobalRefreshButton{
- position:fixed;top:12px;right:16px;z-index:10050;
- border:0;border-radius:12px;padding:10px 15px;
- background:#ffd429;color:#171717;font-weight:800;
- box-shadow:0 3px 12px rgba(0,0,0,.22);cursor:pointer;
+ position:fixed;top:14px;right:16px;z-index:10050;
+ width:44px;height:44px;padding:0;
+ display:flex;align-items:center;justify-content:center;
+ border:0;border-radius:50%;
+ background:#ffd429;color:#171717;font-size:24px;font-weight:700;
+ box-shadow:0 3px 12px rgba(0,0,0,.20);cursor:pointer;
 }
 #satsGlobalRefreshButton:disabled{opacity:.65;cursor:wait}
+#satsGlobalRefreshButton .refresh-glyph{display:inline-block;line-height:1}
+#satsGlobalRefreshButton:disabled .refresh-glyph{animation:satsRefreshSpin .8s linear infinite}
+@keyframes satsRefreshSpin{to{transform:rotate(360deg)}}
 @media(max-width:700px){
- #satsGlobalRefreshButton{top:8px;right:8px;padding:8px 10px;font-size:12px}
+ #satsGlobalRefreshButton{top:8px;right:8px;width:38px;height:38px;font-size:21px}
 }
 </style>
 
@@ -2061,13 +2066,13 @@ body{
 
 <body>
 
-<button type="button" id="satsGlobalRefreshButton" onclick="refreshSATSDataNow()">↻ REFRESH</button>
+<button type="button" id="satsGlobalRefreshButton" onclick="refreshSATSDataNow()" title="Muat semula data" aria-label="Muat semula data"><span class="refresh-glyph">↻</span></button>
 <script id="sats-global-refresh-script">
 function refreshSATSDataNow() {
   const button = document.getElementById("satsGlobalRefreshButton");
   if (button) {
     button.disabled = true;
-    button.textContent = "⏳ REFRESH...";
+    button.innerHTML = '<span class="refresh-glyph">↻</span>';
   }
   let finished = false;
   const done = function() {
@@ -2075,7 +2080,7 @@ function refreshSATSDataNow() {
     finished = true;
     if (button) {
       button.disabled = false;
-      button.textContent = "↻ REFRESH";
+      button.innerHTML = '<span class="refresh-glyph">↻</span>';
     }
   };
   try {
@@ -8142,40 +8147,57 @@ function deleteSelectedStudentsBulk() {
     return;
   }
 
-  const confirmed = confirm(
+  if (!confirm(
     "AMARAN: Anda akan memadam " + ids.length +
     " rekod murid daripada Data Murid.\n\n" +
-    "Rekod kehadiran sejarah tidak akan dipadam.\n" +
+    "Rekod kehadiran sejarah akan dikekalkan.\n" +
     "Tindakan ini tidak boleh dibatalkan. Teruskan?"
-  );
-  if (!confirmed) return;
+  )) return;
 
   const button = document.getElementById("bulkDeleteStudentsButton");
   if (button) {
     button.disabled = true;
-    button.textContent = "⏳ MEMADAM...";
+    button.textContent = "⏳ MEMADAM 0/" + ids.length;
   }
 
-  const url = SATS_API + "?action=bulkDeleteStudents&studentIds=" +
-    encodeURIComponent(JSON.stringify(ids));
+  let index = 0;
+  let deleted = 0;
+  const failed = [];
 
-  callSATS(url, function(data) {
-    if (button) {
-      button.disabled = false;
-      button.textContent = "🗑️ PADAM MURID DIPILIH";
-    }
-
-    if (data && data.success) {
+  function next() {
+    if (index >= ids.length) {
       selectedStudentIds.clear();
-      alert("Selesai. " + Number(data.deletedCount || 0) +
-        " rekod murid dipadam daripada Data Murid. Rekod kehadiran lama dikekalkan.");
+      if (button) {
+        button.disabled = false;
+        button.textContent = "🗑️ PADAM MURID DIPILIH";
+      }
+      updateSelectedStudentCount();
       loadStudents();
       if (typeof loadDashboard === "function") loadDashboard();
-    } else {
-      alert("Gagal memadam murid: " + ((data && data.message) || "Ralat tidak diketahui."));
+
+      if (failed.length) {
+        alert("Selesai dengan sebahagian ralat.\nBerjaya dipadam: " + deleted +
+          "\nGagal: " + failed.length + "\nID gagal: " + failed.join(", ") +
+          "\nSila refresh dan semak rekod tersebut.");
+      } else {
+        alert("Berjaya memadam " + deleted +
+          " rekod murid. Rekod kehadiran sejarah dikekalkan.");
+      }
+      return;
     }
-    updateSelectedStudentCount();
-  });
+
+    const id = ids[index++];
+    const url = SATS_API + "?action=deleteStudent&studentId=" +
+      encodeURIComponent(id);
+
+    callSATS(url, function(data) {
+      if (data && data.success) deleted++;
+      else failed.push(id + (data && data.message ? " (" + data.message + ")" : ""));
+      if (button) button.textContent = "⏳ MEMADAM " + index + "/" + ids.length;
+      next();
+    });
+  }
+  next();
 }
 
 function deleteStudentFromApp(
