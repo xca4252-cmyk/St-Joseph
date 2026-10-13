@@ -2788,8 +2788,8 @@ body{
 
     <label for="editStudentRmt" style="display:block;margin:10px 0 5px;font-weight:600;">Status RMT</label>
     <select id="editStudentRmt" class="form-input">
-      <option value="RMT">Murid RMT</option>
-      <option value="BUKAN RMT">Bukan Murid RMT</option>
+      <option value="YA">Ya</option>
+      <option value="TIDAK">Tidak</option>
     </select>
 
     <div class="edit-student-actions">
@@ -7977,9 +7977,13 @@ function openEditStudent(studentId) {
   const rmtSelect = document.getElementById("editStudentRmt");
   if (rmtSelect) {
     const currentRmt = String(student.rmt || "").trim().toUpperCase();
-    rmtSelect.value = (currentRmt === "RMT" || currentRmt === "YA")
-      ? "RMT"
-      : "BUKAN RMT";
+    // Terima nilai lama yang mungkin tersimpan sebagai RMT/BUKAN RMT atau Ya/Tidak.
+    rmtSelect.value = (
+      currentRmt === "YA" ||
+      currentRmt === "RMT" ||
+      currentRmt === "TRUE" ||
+      currentRmt === "1"
+    ) ? "YA" : "TIDAK";
   }
 
   panel.classList.add("active");
@@ -8036,9 +8040,10 @@ function saveEditedStudent() {
     return;
   }
 
-  const rmtStatus = String(
-    (document.getElementById("editStudentRmt") || {}).value || "BUKAN RMT"
+  const rawRmtStatus = String(
+    (document.getElementById("editStudentRmt") || {}).value || "TIDAK"
   ).trim().toUpperCase();
+  const rmtStatus = rawRmtStatus === "YA" ? "YA" : "TIDAK";
 
   const buttons =
     document.querySelectorAll(
