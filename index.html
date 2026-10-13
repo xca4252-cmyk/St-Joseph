@@ -8065,7 +8065,9 @@ function saveEditedStudent() {
     "&className=" +
     encodeURIComponent(className) +
     "&rmtStatus=" +
-    encodeURIComponent(rmtStatus);
+    encodeURIComponent(rmtStatus) +
+    "&rmt=" +
+    encodeURIComponent(rmtStatus === "YA" ? "RMT" : "BUKAN RMT");
 
   callSATS(
     url,
@@ -11434,6 +11436,86 @@ function deleteClassSetting(
     <div id="rmtMonthlyPreview" style="display:none;margin-top:15px;overflow:auto;"></div>
   </div>
 </section>
+
+
+<script id="sats-class-rmt-sync-fix">
+(function () {
+  const OFFICIAL_SATS_CLASSES = [
+    "1 CEMERLANG", "1 GEMILANG",
+    "2 CEMERLANG", "2 GEMILANG",
+    "3 CEMERLANG", "3 GEMILANG",
+    "4 CEMERLANG", "4 GEMILANG",
+    "5 CEMERLANG", "5 GEMILANG",
+    "6 CEMERLANG", "6 GEMILANG"
+  ];
+
+  function putOptions(select, placeholder, keepValue) {
+    if (!select) return;
+    const previous = keepValue ? select.value : "";
+    select.innerHTML = '<option value="">' + placeholder + '</option>' +
+      OFFICIAL_SATS_CLASSES.map(function (name) {
+        return '<option value="' + name + '">' + name + '</option>';
+      }).join("");
+    if (keepValue && OFFICIAL_SATS_CLASSES.indexOf(previous) >= 0) {
+      select.value = previous;
+    }
+  }
+
+  function syncClassDropdowns() {
+    try {
+      if (typeof allClasses !== "undefined") {
+        allClasses = OFFICIAL_SATS_CLASSES.slice();
+      }
+    } catch (e) {}
+    putOptions(document.getElementById("studentClassInput"), "Pilih Kelas", true);
+    putOptions(document.getElementById("studentClassFilter"), "Semua Kelas", true);
+    putOptions(document.getElementById("editStudentClass"), "Pilih Kelas", true);
+    // Populate other class selectors used by reports/manual attendance without replacing a valid choice.
+    [
+      "manualClass", "manualClassSelect", "reportClass", "dashboardClass",
+      "riskClass", "attendanceClass", "classFilter"
+    ].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el && el.tagName === "SELECT") putOptions(el, "Semua Kelas", true);
+    });
+  }
+
+  function fixRmtSelects() {
+    const add = document.getElementById("studentRmtInput");
+    if (add) {
+      add.innerHTML =
+        '<option value="">Pilih status RMT</option>' +
+        '<option value="RMT">Murid RMT</option>' +
+        '<option value="BUKAN RMT">Bukan Murid RMT</option>';
+    }
+    const edit = document.getElementById("editStudentRmt");
+    if (edit) {
+      const old = String(edit.value || "").trim().toUpperCase();
+      edit.innerHTML = '<option value="YA">Ya</option><option value="TIDAK">Tidak</option>';
+      if (old === "YA" || old === "RMT" || old === "MURID RMT") edit.value = "YA";
+      else edit.value = "TIDAK";
+    }
+  }
+
+  function initFix() {
+    syncClassDropdowns();
+    fixRmtSelects();
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initFix, { once: true });
+  } else {
+    initFix();
+  }
+  window.addEventListener("load", initFix);
+  document.addEventListener("click", function (event) {
+    const target = event.target;
+    if (target && (target.closest("#students") || target.closest("#editStudentPanel"))) {
+      syncClassDropdowns();
+    }
+  }, true);
+})();
+</script>
 
 </body>
 
