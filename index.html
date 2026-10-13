@@ -1,4 +1,3 @@
-```
 <!DOCTYPE html>
 <html lang="ms">
 
@@ -2043,64 +2042,12 @@ body{
 </style>
 
 
-<style id="sats-global-refresh-style">
-#satsGlobalRefreshButton{
- position:fixed;top:14px;right:16px;z-index:10050;
- width:44px;height:44px;padding:0;
- display:flex;align-items:center;justify-content:center;
- border:0;border-radius:50%;
- background:#ffd429;color:#171717;font-size:24px;font-weight:700;
- box-shadow:0 3px 12px rgba(0,0,0,.20);cursor:pointer;
-}
-#satsGlobalRefreshButton:disabled{opacity:.65;cursor:wait}
-#satsGlobalRefreshButton .refresh-glyph{display:inline-block;line-height:1}
-#satsGlobalRefreshButton:disabled .refresh-glyph{animation:satsRefreshSpin .8s linear infinite}
-@keyframes satsRefreshSpin{to{transform:rotate(360deg)}}
-@media(max-width:700px){
- #satsGlobalRefreshButton{top:8px;right:8px;width:38px;height:38px;font-size:21px}
-}
-</style>
+
 
 </head>
 
 
 <body>
-
-<button type="button" id="satsGlobalRefreshButton" onclick="refreshSATSDataNow()" title="Muat semula data" aria-label="Muat semula data"><span class="refresh-glyph">↻</span></button>
-<script id="sats-global-refresh-script">
-function refreshSATSDataNow() {
-  const button = document.getElementById("satsGlobalRefreshButton");
-  if (button) {
-    button.disabled = true;
-    button.innerHTML = '<span class="refresh-glyph">↻</span>';
-  }
-  let finished = false;
-  const done = function() {
-    if (finished) return;
-    finished = true;
-    if (button) {
-      button.disabled = false;
-      button.innerHTML = '<span class="refresh-glyph">↻</span>';
-    }
-  };
-  try {
-    if (typeof loadStudents === "function") loadStudents();
-    if (typeof loadDashboard === "function") loadDashboard();
-    if (typeof loadRmtData === "function") loadRmtData();
-    if (typeof loadRMT === "function") loadRMT();
-    if (typeof loadSettings === "function") loadSettings();
-    // Give the asynchronous Apps Script calls time to complete before restoring the button.
-    setTimeout(done, 1800);
-  } catch (error) {
-    console.error("SATS refresh error", error);
-    done();
-    alert("Refresh tidak berjaya. Sila cuba sekali lagi.");
-  }
-}
-</script>
-
-
-
 <!-- SATS frontend: class dropdown + class filter + bulk QR printing -->
 
 
@@ -5907,7 +5854,7 @@ document
 
         document.getElementById("studentRmtInput").value = "";
 
-        loadStudents();
+        satsRefreshAfterStudentMutation();
 
         /* Refresh dashboard totals after a successful student save. */
         const dashboardPage = document.getElementById("dashboard");
@@ -8119,7 +8066,7 @@ function saveEditedStudent() {
         );
 
         cancelEditStudent();
-        loadStudents();
+        satsRefreshAfterStudentMutation();
 
       } else {
 
@@ -8172,7 +8119,7 @@ function deleteSelectedStudentsBulk() {
         button.textContent = "🗑️ PADAM MURID DIPILIH";
       }
       updateSelectedStudentCount();
-      loadStudents();
+      satsRefreshAfterStudentMutation();
       if (typeof loadDashboard === "function") loadDashboard();
 
       if (failed.length) {
@@ -8248,7 +8195,7 @@ function deleteStudentFromApp(
         );
 
 
-        loadStudents();
+        satsRefreshAfterStudentMutation();
         if (typeof loadDashboard === "function") loadDashboard();
 
       }
@@ -11616,7 +11563,23 @@ function deleteClassSetting(
 })();
 </script>
 
+
+<script id="sats-auto-refresh-after-mutation">
+function satsRefreshAfterStudentMutation() {
+  try {
+    if (typeof loadStudents === "function") loadStudents();
+    if (typeof loadDashboard === "function") loadDashboard();
+    if (typeof loadAtRiskStudents === "function") {
+      const risk = document.getElementById("risk");
+      if (risk && risk.classList.contains("active")) loadAtRiskStudents();
+    }
+    if (typeof loadRmtDaily === "function") {
+      const rmtPage = document.getElementById("rmt");
+      if (rmtPage && rmtPage.classList.contains("active")) loadRmtDaily();
+    }
+  } catch (err) { console.error("SATS auto refresh failed", err); }
+}
+</script>
 </body>
 
 </html>
-```
