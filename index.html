@@ -2650,16 +2650,7 @@ body{
     <h3>
       ➕ Tambah Murid
     </h3>
-
-
-    <input
-      id="studentIdInput"
-      class="form-input"
-      placeholder="ID Murid"
-    >
-
-
-    <input
+<input
       id="studentNameInput"
       class="form-input"
       placeholder="Nama Murid"
@@ -2757,6 +2748,17 @@ body{
         onclick="clearFilteredStudents()"
       >
         ☐ NYAH PILIH
+      </button>
+
+      <button
+        type="button"
+        id="bulkDeleteStudentsButton"
+        class="print-button"
+        style="background:#b91c1c;color:#fff;"
+        onclick="deleteSelectedStudentsBulk()"
+        disabled
+      >
+        🗑️ PADAM MURID DIPILIH
       </button>
 
     </div>
@@ -5756,18 +5758,7 @@ function loadClasses(done) {
    ================================================= */
 
 function addNewStudent() {
-
-
-  const id =
-    document
-      .getElementById(
-        "studentIdInput"
-      )
-      .value
-      .trim();
-
-
-  const name =
+const name =
     document
       .getElementById(
         "studentNameInput"
@@ -5789,14 +5780,13 @@ function addNewStudent() {
 
 
   if (
-    !id ||
     !name ||
     !className ||
     !rmtStatus
   ) {
 
     alert(
-      "Sila lengkapkan ID, nama, kelas dan status RMT murid."
+      "Sila lengkapkan nama, kelas dan status RMT murid."
     );
 
     return;
@@ -5821,8 +5811,6 @@ function addNewStudent() {
   const url =
     SATS_API +
     "?action=addStudent" +
-    "&id=" +
-    encodeURIComponent(id) +
     "&name=" +
     encodeURIComponent(name) +
     "&className=" +
@@ -5850,16 +5838,7 @@ function addNewStudent() {
         alert(
           "✓ Murid berjaya ditambah."
         );
-
-
-        document
-          .getElementById(
-            "studentIdInput"
-          )
-          .value = "";
-
-
-        document
+document
           .getElementById(
             "studentNameInput"
           )
@@ -7396,6 +7375,8 @@ function updateSelectedStudentCount() {
   const count = selectedStudentIds.size;
 
   if (button) button.disabled = count === 0;
+  const deleteButton = document.getElementById("bulkDeleteStudentsButton");
+  if (deleteButton) deleteButton.disabled = count === 0;
 
   if (text) {
     text.innerText = count
@@ -8100,6 +8081,53 @@ function saveEditedStudent() {
   );
 }
 
+
+
+function deleteSelectedStudentsBulk() {
+  const ids = Array.from(selectedStudentIds).map(function(id) {
+    return String(id || "").trim();
+  }).filter(Boolean);
+
+  if (!ids.length) {
+    alert("Sila pilih sekurang-kurangnya seorang murid untuk dipadam.");
+    return;
+  }
+
+  const confirmed = confirm(
+    "AMARAN: Anda akan memadam " + ids.length +
+    " rekod murid daripada Data Murid.\n\n" +
+    "Rekod kehadiran sejarah tidak akan dipadam.\n" +
+    "Tindakan ini tidak boleh dibatalkan. Teruskan?"
+  );
+  if (!confirmed) return;
+
+  const button = document.getElementById("bulkDeleteStudentsButton");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "⏳ MEMADAM...";
+  }
+
+  const url = SATS_API + "?action=bulkDeleteStudents&studentIds=" +
+    encodeURIComponent(JSON.stringify(ids));
+
+  callSATS(url, function(data) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "🗑️ PADAM MURID DIPILIH";
+    }
+
+    if (data && data.success) {
+      selectedStudentIds.clear();
+      alert("Selesai. " + Number(data.deletedCount || 0) +
+        " rekod murid dipadam daripada Data Murid. Rekod kehadiran lama dikekalkan.");
+      loadStudents();
+      if (typeof loadDashboard === "function") loadDashboard();
+    } else {
+      alert("Gagal memadam murid: " + ((data && data.message) || "Ralat tidak diketahui."));
+    }
+    updateSelectedStudentCount();
+  });
+}
 
 function deleteStudentFromApp(
   studentId
