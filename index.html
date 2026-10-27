@@ -4293,7 +4293,8 @@ function cetakLaporanIndividu() {
         '" style="max-height:65px;max-width:100px;object-fit:contain;">'
       : "";
 
-  const tableRows =
+  // Ringkasan kehadiran setiap murid dikekalkan.
+  const summaryRows =
     students.map(function(student, index) {
       return (
         "<tr>" +
@@ -4309,6 +4310,64 @@ function cetakLaporanIndividu() {
       );
     }).join("");
 
+  // Jadual terperinci menggunakan tarikh dan masa rekod yang
+  // telah dikembalikan oleh Code.gs (data.students[].records).
+  // Masa dipaparkan sebagai timestamp gabungan tarikh + masa.
+  let detailCounter = 0;
+
+  const detailRows =
+    students.map(function(student) {
+
+      const records =
+        Array.isArray(student.records)
+          ? student.records
+          : [];
+
+      return records.map(function(record) {
+
+        detailCounter += 1;
+
+        const recordDate =
+          String(record.date || "").trim();
+
+        const recordTime =
+          String(record.time || "").trim();
+
+        const timestamp =
+          recordDate && recordTime
+            ? formatReportDate(recordDate) + " " + recordTime
+            : "—";
+
+        const status =
+          String(record.status || "Tidak Hadir").trim();
+
+        return (
+          "<tr>" +
+            "<td>" + detailCounter + "</td>" +
+            "<td>" + escapeHtml(student.name || "") + "</td>" +
+            "<td>" + escapeHtml(student.id || "") + "</td>" +
+            "<td>" + escapeHtml(recordDate ? formatReportDate(recordDate) : "—") + "</td>" +
+            "<td>" + escapeHtml(status || "—") + "</td>" +
+            "<td>" + escapeHtml(timestamp) + "</td>" +
+            "<td>" + escapeHtml(record.method || "—") + "</td>" +
+            "<td>" + escapeHtml(record.reason || "—") + "</td>" +
+          "</tr>"
+        );
+
+      }).join("");
+
+    }).join("");
+
+  const detailTable =
+    '<h3 style="margin-top:24px;">REKOD KEHADIRAN TERPERINCI DENGAN TIMESTAMP</h3>' +
+    '<p style="font-size:9px;margin:4px 0;">Timestamp dibentuk daripada tarikh dan masa rekod dalam SATS. Tanda “—” bermaksud tiada masa direkodkan untuk hari tersebut.</p>' +
+    '<table><thead><tr>' +
+      '<th>Bil</th><th>Nama Murid</th><th>ID</th><th>Tarikh</th>' +
+      '<th>Status</th><th>Timestamp</th><th>Kaedah</th><th>Catatan</th>' +
+    '</tr></thead><tbody>' +
+      (detailRows || '<tr><td colspan="8">Tiada rekod terperinci untuk tempoh ini.</td></tr>') +
+    '</tbody></table>';
+
   openPrintWindow(
     schoolName,
     logoHtml,
@@ -4319,13 +4378,15 @@ function cetakLaporanIndividu() {
       formatReportDate(data.endDate) +
       " | Kelas: " +
       className,
+    '<h3>RINGKASAN KEHADIRAN MENGIKUT MURID</h3>' +
     '<table><thead><tr>' +
       '<th>Bil</th><th>Nama Murid</th><th>ID</th><th>Kelas</th>' +
       '<th>Hari Sekolah</th><th>Hadir</th><th>Tidak Hadir</th>' +
       '<th>% Kehadiran</th>' +
     '</tr></thead><tbody>' +
-      tableRows +
-    '</tbody></table>'
+      summaryRows +
+    '</tbody></table>' +
+    detailTable
   );
 }
 
@@ -9320,7 +9381,13 @@ function startScanner() {
 
       scanner =
         new Html5Qrcode(
-          "reader"
+          "reader",
+          {
+            formatsToSupport: [
+              Html5QrcodeSupportedFormats.QR_CODE
+            ],
+            verbose: false
+          }
         );
 
       status.innerText =
@@ -9336,11 +9403,11 @@ function startScanner() {
         selectedCamera.id,
 
         {
-          fps: 10,
+          fps: 15,
 
           qrbox: {
-            width: 250,
-            height: 250
+            width: 220,
+            height: 220
           },
 
           aspectRatio: 1.0
