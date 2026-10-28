@@ -2081,6 +2081,56 @@ body{
   #manualAttendanceMobileSave{min-height:48px;padding:0 18px;border:0;border-radius:10px;background:#15803d;color:#fff;font-weight:800;font-size:14px;white-space:nowrap;box-shadow:0 2px 5px rgba(21,128,61,.22)}
   #manualAttendanceMobileSave:disabled{opacity:.55}
 }
+
+
+<style id="sats-manual-single-student-ui">
+/* Kehadiran Manual: fokus seorang murid setiap kali, pilihan terus pada skrin */
+#manual .report-filter-grid{grid-template-columns:minmax(0,1fr)}
+#manualClass{display:none!important}
+#manualClass+*{display:none!important}
+#manual .report-filter-grid>div:has(#manualClass),
+#manual .report-filter-grid>div:has(button[onclick="loadManualAttendance()"]){display:none!important}
+#manual .report-filter-grid>div:has(#manualStudentSearch){grid-column:1/-1!important}
+#manual .page-subtitle{max-width:680px}
+#manualAttendanceCard .report-section-header>div:last-child button[onclick="markAllManualPresent()"]{display:none!important}
+#manualAttendanceCard .report-section-subtitle{display:none}
+#manualAttendanceCard .report-table{width:100%;min-width:0!important;border-collapse:separate;border-spacing:0}
+#manualAttendanceCard .report-table thead{display:none}
+#manualAttendanceCard .report-table tbody tr[data-student-id]{display:block;background:#fff;border:1px solid #dbe4ee;border-radius:16px;padding:16px;margin:8px 0;box-shadow:0 3px 12px rgba(15,23,42,.05)}
+#manualAttendanceCard .report-table tbody tr[data-student-id] td{display:none!important;border:0!important}
+#manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Murid"],
+#manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Status"]{display:block!important;width:100%;padding:0!important}
+#manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Murid"]{font-size:19px;font-weight:800;color:#0f172a;margin-bottom:18px!important;line-height:1.35}
+#manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Murid"] small{display:block;font-size:12px;font-weight:500;color:#64748b;margin-top:4px}
+#manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Status"]:before{content:"PILIH KEHADIRAN";display:block;margin-bottom:9px;font-size:11px;font-weight:800;letter-spacing:.06em;color:#64748b}
+.manual-choice-group{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.manual-choice{display:flex;align-items:center;justify-content:center;gap:8px;min-height:60px;border:2px solid #cbd5e1;border-radius:13px;background:#fff;color:#334155;font-size:16px;font-weight:800;cursor:pointer;touch-action:manipulation}
+.manual-choice .manual-choice-dot{width:18px;height:18px;border:2px solid currentColor;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;flex:0 0 18px}
+.manual-choice[aria-pressed="true"][data-status="Hadir"]{border-color:#16a34a;background:#f0fdf4;color:#166534}
+.manual-choice[aria-pressed="true"][data-status="Tidak Hadir"]{border-color:#dc2626;background:#fef2f2;color:#991b1b}
+.manual-choice[aria-pressed="true"] .manual-choice-dot:after{content:"";width:8px;height:8px;border-radius:50%;background:currentColor}
+.manual-choice:disabled{opacity:.5;cursor:not-allowed}
+#manualAttendanceCard .report-section-header{align-items:center;gap:10px}
+#manualAttendanceCard .report-section-header>div:last-child{display:flex;gap:8px;flex-wrap:wrap}
+#manualAttendanceCard .report-section-header button[onclick="saveManualAttendance()"]{min-height:46px;padding:10px 18px;border-radius:11px;font-weight:800}
+#manualStudentSuggestions button{min-height:54px;font-size:15px}
+@media(max-width:768px){
+  #manual .page-subtitle{font-size:13px;line-height:1.45}
+  #manual .card{padding:13px!important}
+  #manual .report-filter-grid{gap:10px}
+  #manual .report-filter-grid>div:has(#manualDate){display:block!important}
+  #manualStudentSearch{min-height:52px;font-size:17px!important;border-radius:12px!important;padding:12px!important}
+  #manualAttendanceCard{margin-top:12px!important;padding:12px!important}
+  #manualAttendanceCard .report-section-header{flex-direction:row!important;align-items:center!important}
+  #manualAttendanceCard .report-section-title{font-size:16px!important}
+  #manualAttendanceCard .report-section-header>div:last-child{display:none!important}
+  #manualAttendanceCard .report-table tbody tr[data-student-id]{padding:16px 14px;margin:0 0 10px;border-radius:15px}
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Murid"]{font-size:18px}
+  .manual-choice{min-height:64px;font-size:16px}
+  #manualAttendanceMobileBar.is-visible{display:flex}
+  #manualAttendanceMobileBar .manual-mobile-info strong{font-size:12px}
+}
+</style>
 </style>
 
 </head>
@@ -2552,7 +2602,7 @@ body{
   </div>
 
   <div class="page-subtitle">
-    Ambil kehadiran tanpa QR dan simpan kaedah serta alasan ketidakhadiran.
+    Cari seorang murid, tandakan Hadir atau Tidak Hadir, kemudian simpan. Selepas disimpan, terus cari murid seterusnya.
   </div>
 
   <div class="card">
@@ -2605,7 +2655,7 @@ body{
           aria-controls="manualStudentSuggestions"
         >
         <div id="manualStudentSuggestions" role="listbox" style="display:none;position:absolute;z-index:1000;top:100%;left:0;right:0;max-height:260px;overflow-y:auto;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 8px 20px rgba(15,23,42,.14);"></div>
-        <small style="display:block;margin-top:5px;color:#64748b;">Pilih nama daripada cadangan untuk memilih kelas dan mencari murid dalam senarai kehadiran. Senarai kelas penuh kekal dipaparkan.</small>
+        <small style="display:block;margin-top:5px;color:#64748b;">Pilih nama murid daripada cadangan. Tandakan Hadir atau Tidak Hadir pada paparan seterusnya, tekan SIMPAN, kemudian cari murid seterusnya.</small>
       </div>
 
     </div>
@@ -6317,6 +6367,8 @@ function selectManualStudentSuggestion(index) {
   if (!document.getElementById("manualDate").value) {
     document.getElementById("manualDate").value = getTodayDateInput();
   }
+  const statusBox = document.getElementById('manualCalendarStatus');
+  if (statusBox) statusBox.innerHTML = '<div style="padding:9px 11px;border-radius:10px;background:#eff6ff;color:#1d4ed8;font-weight:700;">Memuatkan rekod ' + escapeHtml(student.name) + '…</div>';
   loadManualAttendance();
 }
 
@@ -6536,19 +6588,25 @@ function loadManualAttendance() {
     const classStudents = students.filter(function(student) {
       return String(student.className || "").trim() === String(className || "").trim();
     });
+    // Dalam aliran carian, paparkan seorang murid yang dipilih sahaja.
+    const targetStudents = manualSelectedStudentId
+      ? classStudents.filter(function(student) {
+          return String(student.id || "").trim() === String(manualSelectedStudentId).trim();
+        })
+      : classStudents;
 
-    if (!classStudents.length) {
+    if (!targetStudents.length) {
       body.innerHTML = '<tr><td colspan="7" style="padding:15px;text-align:center;">Tiada murid dalam kelas ini. Jika data baru diubah, tekan SEGARKAN DATA MURID dahulu.</td></tr>';
       statusBox.innerHTML = "";
       return;
     }
 
-    const initialRows = classStudents.map(function(student) {
+    const initialRows = targetStudents.map(function(student) {
       return {
         id: student.id,
         name: student.name,
         className: student.className,
-        status: "Tidak Hadir",
+        status: "",
         reason: "",
         note: "",
         lockedByQR: false
@@ -6583,13 +6641,14 @@ function loadManualAttendance() {
         if (id) attendanceMap[id] = item;
       });
 
-      const merged = classStudents.map(function(student) {
+      const merged = targetStudents.map(function(student) {
         const attendance = attendanceMap[String(student.id || "").trim()];
         return {
           id: student.id,
           name: student.name,
           className: student.className,
-          status: attendance && attendance.status ? attendance.status : "Tidak Hadir",
+          // Jika belum ada rekod, guru mesti memilih Hadir atau Tidak Hadir secara jelas.
+          status: attendance && attendance.recorded && attendance.status ? attendance.status : "",
           reason: attendance && attendance.reason ? attendance.reason : "",
           note: attendance && attendance.note ? attendance.note : "",
           lockedByQR: !!(attendance && attendance.lockedByQR)
@@ -6655,133 +6714,71 @@ function updateManualAttendanceMobileBar() {
   }
 }
 
-function renderManualAttendance(
-  students
-) {
-
-  const body =
-    document.getElementById(
-      "manualAttendanceBody"
-    );
+function renderManualAttendance(students) {
+  const body = document.getElementById("manualAttendanceBody");
+  if (!body) return;
 
   if (!students.length) {
-
-    body.innerHTML =
-      '<tr><td colspan="7" style="padding:15px;text-align:center;">Tiada murid dalam kelas ini.</td></tr>';
-
+    body.innerHTML = '<tr><td colspan="7" style="padding:15px;text-align:center;">Murid tidak ditemui.</td></tr>';
     return;
   }
 
-  body.innerHTML =
-    students.map(function(student, index) {
+  body.innerHTML = students.map(function(student, index) {
+    const locked = !!student.lockedByQR;
+    const status = student.status === "Hadir" || student.status === "Tidak Hadir" ? student.status : "";
+    const safeId = escapeAttribute(String(student.id || ""));
+    return '<tr data-student-id="' + safeId + '" data-locked="' + (locked ? '1' : '0') + '">' +
+      '<td data-label="Bil" style="display:none">' + (index + 1) + '</td>' +
+      '<td data-label="Murid"><strong>' + escapeHtml(student.name || "") + '</strong><small>' + escapeHtml(student.className || "") + ' · ' + escapeHtml(student.id || "") + '</small></td>' +
+      '<td data-label="Kelas" style="display:none">' + escapeHtml(student.className || "") + '</td>' +
+      '<td data-label="Status">' +
+        '<div class="manual-choice-group">' +
+          '<button type="button" class="manual-choice" data-status="Hadir" aria-pressed="' + (status === "Hadir" ? 'true' : 'false') + '" ' + (locked ? 'disabled' : '') + ' onclick="setManualStudentStatusFromButton(this)"><span class="manual-choice-dot"></span>Hadir</button>' +
+          '<button type="button" class="manual-choice" data-status="Tidak Hadir" aria-pressed="' + (status === "Tidak Hadir" ? 'true' : 'false') + '" ' + (locked ? 'disabled' : '') + ' onclick="setManualStudentStatusFromButton(this)"><span class="manual-choice-dot"></span>Tidak Hadir</button>' +
+        '</div>' +
+        '<select class="form-input manual-status" aria-label="Status kehadiran" style="display:none" ' + (locked ? 'disabled' : '') + '>' +
+          '<option value="" ' + (!status ? 'selected' : '') + '>Pilih status</option>' +
+          '<option value="Hadir" ' + (status === 'Hadir' ? 'selected' : '') + '>Hadir</option>' +
+          '<option value="Tidak Hadir" ' + (status === 'Tidak Hadir' ? 'selected' : '') + '>Tidak Hadir</option>' +
+        '</select>' +
+      '</td>' +
+      '<td data-label="Kaedah" style="display:none">' + (locked ? 'QR' : 'MANUAL') + '</td>' +
+      '<td data-label="Alasan" style="display:none">' + manualReasonOptions(student.reason || "", locked) + '</td>' +
+      '<td data-label="Catatan" style="display:none"><input class="form-input manual-note" ' + (locked ? 'disabled' : '') + ' value="' + escapeAttribute(student.note || "") + '"></td>' +
+    '</tr>';
+  }).join("");
 
-      const locked =
-        !!student.lockedByQR;
-
-      return (
-        "<tr " +
-        'data-student-id="' +
-        escapeAttribute(String(student.id)) +
-        '" ' +
-        'data-locked="' +
-        (locked ? "1" : "0") +
-        '">' +
-
-        '<td data-label="Bil">' +
-        (index + 1) +
-        "</td>" +
-
-        '<td data-label="Murid"><strong>' +
-        escapeHtml(student.name) +
-        "</strong><br><small>" +
-        escapeHtml(student.id) +
-        "</small></td>" +
-
-        '<td data-label="Kelas">' +
-        escapeHtml(student.className) +
-        "</td>" +
-
-        '<td data-label="Status">' +
-        manualStatusOptions(
-          (
-            student.status === "Hadir" ||
-            student.status === "Tidak Hadir"
-          )
-            ? student.status
-            : "Tidak Hadir",
-          locked
-        ) +
-        "</td>" +
-
-        '<td data-label="Kaedah">' +
-        (
-          locked
-            ? "📷 QR"
-            : "✎ MANUAL"
-        ) +
-        "</td>" +
-
-        '<td data-label="Alasan">' +
-        manualReasonOptions(
-          student.reason || "",
-          locked
-        ) +
-        "</td>" +
-
-        '<td data-label="Catatan">' +
-        '<input class="form-input manual-note" ' +
-        'placeholder="Catatan (pilihan)" ' +
-        (locked ? "disabled" : "") +
-        ' value="' +
-        escapeAttribute(student.note || "") +
-        '">' +
-        "</td>" +
-
-        "</tr>"
-      );
-
-    }).join("");
-
-  body.querySelectorAll(
-    ".manual-status"
-  ).forEach(function(select) {
-
-    select.addEventListener(
-      "change",
-      function() {
-
-        const row =
-          select.closest("tr");
-
-        const reason =
-          row.querySelector(
-            ".manual-reason"
-          );
-
-        if (
-          select.value ===
-          "Tidak Hadir"
-        ) {
-          reason.disabled = false;
-        } else {
-          reason.value = "";
-          reason.disabled = true;
-        }
-        const reasonCell = reason ? reason.closest("td") : null;
-        if (reasonCell && window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
-          reasonCell.style.display = select.value === "Tidak Hadir" ? "block" : "none";
-        }
-
+  body.querySelectorAll('.manual-status').forEach(function(select) {
+    select.addEventListener('change', function() {
+      const row = select.closest('tr');
+      const reason = row ? row.querySelector('.manual-reason') : null;
+      if (reason) {
+        if (select.value === 'Hadir') reason.value = '';
+        reason.disabled = select.value !== 'Tidak Hadir' || row.dataset.locked === '1';
       }
-    );
-
-    select.dispatchEvent(
-      new Event("change")
-    );
-
+      row.querySelectorAll('.manual-choice').forEach(function(button) {
+        button.setAttribute('aria-pressed', button.dataset.status === select.value ? 'true' : 'false');
+      });
+      updateManualAttendanceMobileBar();
+    });
   });
 
   setManualAttendanceBaseline();
+  const lockedStudent = students.find(function(student) { return student.lockedByQR; });
+  const statusBox = document.getElementById('manualCalendarStatus');
+  if (lockedStudent && statusBox) {
+    statusBox.innerHTML = '<div style="padding:10px;border-radius:10px;background:#fef3c7;color:#92400e;font-weight:700;">📷 Kehadiran murid ini sudah direkod melalui QR. Rekod dikunci untuk mengelakkan pertindihan.</div>';
+  }
+}
+
+function setManualStudentStatusFromButton(button) {
+  if (!button || button.disabled) return;
+  const row = button.closest('tr[data-student-id]');
+  if (!row || row.dataset.locked === '1') return;
+  const select = row.querySelector('.manual-status');
+  if (!select) return;
+  select.value = button.dataset.status || '';
+  select.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 
@@ -6856,36 +6853,25 @@ function saveManualAttendance() {
     return;
   }
 
-  const entries =
-    rows
-      .filter(function(row) {
-        return row.dataset.locked !== "1";
-      })
-      .map(function(row) {
+  const entries = rows
+    .filter(function(row) { return row.dataset.locked !== "1"; })
+    .map(function(row) {
+      const statusControl = row.querySelector('.manual-status');
+      return {
+        id: row.getAttribute('data-student-id'),
+        status: statusControl ? statusControl.value : '',
+        reason: '',
+        note: ''
+      };
+    });
 
-        return {
-          id:
-            row.getAttribute(
-              "data-student-id"
-            ),
-
-          status:
-            row.querySelector(
-              ".manual-status"
-            ).value,
-
-          reason:
-            row.querySelector(
-              ".manual-reason"
-            ).value,
-
-          note:
-            row.querySelector(
-              ".manual-note"
-            ).value
-        };
-
-      });
+  if (entries.some(function(entry) { return entry.status !== 'Hadir' && entry.status !== 'Tidak Hadir'; })) {
+    const statusBox = document.getElementById('manualCalendarStatus');
+    if (statusBox) statusBox.innerHTML = '<div style="padding:10px;border-radius:10px;background:#fef3c7;color:#92400e;font-weight:700;">Sila pilih Hadir atau Tidak Hadir sebelum menyimpan.</div>';
+    const choice = document.querySelector('#manualAttendanceBody .manual-choice');
+    if (choice) choice.focus();
+    return;
+  }
 
   if (!entries.length) {
     alert(
@@ -6916,21 +6902,25 @@ function saveManualAttendance() {
       desktopSaveButtons.forEach(function(button) { button.disabled = false; button.textContent = button.dataset.oldText || '💾 SIMPAN KEHADIRAN'; });
       updateManualAttendanceMobileBar();
 
-      if (!data || !data.success) {
-
-        alert(
-          (data && data.message) ||
-          "Gagal menyimpan kehadiran manual."
-        );
-
+      if (!data || !data.success || Number(data.saved || 0) < 1) {
+        alert((data && data.message) || 'Kehadiran belum disahkan tersimpan. Sila semak dan cuba lagi.');
         return;
       }
 
-      alert(
-        "Kehadiran manual berjaya diproses."
-      );
+      const statusBox = document.getElementById('manualCalendarStatus');
+      if (statusBox) statusBox.innerHTML = '<div style="padding:10px;border-radius:10px;background:#dcfce7;color:#166534;font-weight:800;">✓ Kehadiran berjaya disimpan. Sila cari murid seterusnya.</div>';
 
-      loadManualAttendance();
+      // Kembali ke carian selepas satu murid disimpan.
+      const searchInput = document.getElementById('manualStudentSearch');
+      const suggestionBox = document.getElementById('manualStudentSuggestions');
+      const card = document.getElementById('manualAttendanceCard');
+      if (card) card.style.display = 'none';
+      if (suggestionBox) { suggestionBox.style.display = 'none'; suggestionBox.innerHTML = ''; }
+      if (searchInput) { searchInput.value = ''; searchInput.focus(); }
+      manualSelectedStudentId = '';
+      manualSearchMatches = [];
+      manualSearchActiveIndex = -1;
+      updateManualAttendanceMobileBar();
 
     }
   );
