@@ -2086,13 +2086,11 @@ body{
 <style id="sats-manual-single-student-ui">
 /* Kehadiran Manual: fokus seorang murid setiap kali, pilihan terus pada skrin */
 #manual .report-filter-grid{grid-template-columns:minmax(0,1fr)}
-#manualClass{display:none!important}
-#manualClass+*{display:none!important}
-#manual .report-filter-grid>div:has(#manualClass),
-#manual .report-filter-grid>div:has(button[onclick="loadManualAttendance()"]){display:none!important}
+#manualClass{display:block!important}
+#manual .report-filter-grid>div:has(#manualClass){display:block!important;grid-column:1/-1!important}
+#manual .report-filter-grid>div:has(button[onclick*="loadManualAttendance"]){display:flex!important;grid-column:1/-1!important}
 #manual .report-filter-grid>div:has(#manualStudentSearch){grid-column:1/-1!important}
 #manual .page-subtitle{max-width:680px}
-#manualAttendanceCard .report-section-header>div:last-child button[onclick="markAllManualPresent()"]{display:none!important}
 #manualAttendanceCard .report-section-subtitle{display:none}
 #manualAttendanceCard .report-table{width:100%;min-width:0!important;border-collapse:separate;border-spacing:0}
 #manualAttendanceCard .report-table thead{display:none}
@@ -2123,7 +2121,9 @@ body{
   #manualAttendanceCard{margin-top:12px!important;padding:12px!important}
   #manualAttendanceCard .report-section-header{flex-direction:row!important;align-items:center!important}
   #manualAttendanceCard .report-section-title{font-size:16px!important}
-  #manualAttendanceCard .report-section-header>div:last-child{display:none!important}
+  #manualAttendanceCard .report-section-header{flex-direction:column!important;align-items:stretch!important}
+  #manualAttendanceCard .report-section-header>div:last-child{display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important;width:100%}
+  #manualAttendanceCard .report-section-header>div:last-child button{display:block!important;min-height:46px;font-size:12px;padding:8px 6px}
   #manualAttendanceCard .report-table tbody tr[data-student-id]{padding:16px 14px;margin:0 0 10px;border-radius:15px}
   #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Murid"]{font-size:18px}
   .manual-choice{min-height:64px;font-size:16px}
@@ -2602,7 +2602,7 @@ body{
   </div>
 
   <div class="page-subtitle">
-    Cari seorang murid, tandakan Hadir atau Tidak Hadir, kemudian simpan. Selepas disimpan, terus cari murid seterusnya.
+    Imbas QR atau cari nama murid. Pilih kelas untuk tanda kehadiran seluruh kelas, atau pilih seorang murid untuk kemas kini secara manual.
   </div>
 
   <div class="card">
@@ -2616,29 +2616,6 @@ body{
           type="date"
           class="form-input"
         >
-      </div>
-
-      <div>
-        <label>Kelas</label>
-        <select
-          id="manualClass"
-          class="form-input"
-        >
-          <option value="">Pilih Kelas</option>
-        </select>
-      </div>
-
-      <div
-        style="display:flex;align-items:end;"
-      >
-        <button
-          type="button"
-          class="print-button"
-          style="margin:0;width:100%;"
-          onclick="loadManualAttendance()"
-        >
-          📋 PAPAR SENARAI MURID
-        </button>
       </div>
 
       <div style="grid-column:1 / -1;position:relative;">
@@ -2655,7 +2632,19 @@ body{
           aria-controls="manualStudentSuggestions"
         >
         <div id="manualStudentSuggestions" role="listbox" style="display:none;position:absolute;z-index:1000;top:100%;left:0;right:0;max-height:260px;overflow-y:auto;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 8px 20px rgba(15,23,42,.14);"></div>
-        <small style="display:block;margin-top:5px;color:#64748b;">Pilih nama murid daripada cadangan. Tandakan Hadir atau Tidak Hadir pada paparan seterusnya, tekan SIMPAN, kemudian cari murid seterusnya.</small>
+        <small style="display:block;margin-top:5px;color:#64748b;">Pilih nama untuk merekod seorang murid, atau pilih kelas di bawah untuk memaparkan senarai kelas.</small>
+      </div>
+
+      <div style="grid-column:1 / -1;">
+        <label for="manualClass">Kelas</label>
+        <select id="manualClass" class="form-input" onchange="manualSelectedStudentId='';">
+          <option value="">Pilih Kelas</option>
+        </select>
+      </div>
+
+      <div style="grid-column:1 / -1;display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="print-button" style="margin:0;flex:1;min-width:180px;" onclick="manualSelectedStudentId='';loadManualAttendance()">📋 PAPAR SENARAI MURID</button>
+        <button type="button" class="print-button" style="margin:0;flex:1;min-width:180px;background:#0f766e;" onclick="showPage('scanner')">📷 IMBAS QR</button>
       </div>
 
     </div>
@@ -6297,8 +6286,10 @@ function searchManualStudents() {
   }
 
   const source = Array.isArray(allStudents) && allStudents.length ? allStudents : [];
+  const selectedClass = String((document.getElementById("manualClass") || {}).value || "").trim();
   manualSearchMatches = source.filter(function(student) {
-    return normalizeManualSearchText(student.name).includes(query);
+    const classMatches = !selectedClass || String(student.className || "").trim() === selectedClass;
+    return classMatches && normalizeManualSearchText(student.name).includes(query);
   }).sort(function(a, b) {
     const an = normalizeManualSearchText(a.name);
     const bn = normalizeManualSearchText(b.name);
