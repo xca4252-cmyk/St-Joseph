@@ -2650,6 +2650,24 @@ body{
     Pengurusan maklumat murid
   </div>
 
+  <div class="card" style="display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+    <div style="font-size:13px;color:#475569;max-width:620px;">
+      Data murid disimpan pada peranti ini untuk dibuka dengan pantas. Segerakkan daripada Google Sheets hanya apabila ada perubahan data di helaian.
+    </div>
+    <button type="button" class="button button-dark" id="syncStudentDataButton" onclick="forceRefreshStudentData()">
+      ↻ SEGARKAN DATA MURID
+    </button>
+  </div>
+
+  <div class="card" style="display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;border:1px solid #f59e0b;background:#fffbeb;">
+    <div style="font-size:13px;color:#92400e;max-width:650px;">
+      <strong>⬆️ Naik Tahun Murid</strong><br>
+      Murid Tahun 1 hingga Tahun 5 akan dinaikkan satu tahun. Murid Tahun 6 akan dikeluarkan daripada senarai Data Murid. Rekod kehadiran sejarah tidak dipadam. Tindakan ini perlu disemak sebelum diteruskan.
+    </div>
+    <button type="button" class="button button-dark" id="promoteStudentsButton" style="background:#b45309;color:#fff;" onclick="promoteStudentsToNextYearUI()">
+      ⬆️ NAIK TAHUN MURID
+    </button>
+  </div>
 
   <!-- ADD STUDENT -->
 
@@ -5961,45 +5979,73 @@ function loadStudents() {
   const container = document.getElementById("studentList");
   if (!container) return;
 
-  // Show cached records immediately so the page never spins forever.
   const cached = readStudentCache();
-  if (cached && Array.isArray(cached.students) && cached.students.length) {
+  if (cached && Array.isArray(cached.students)) {
     applyStudentData(cached.students);
     renderStudentCache();
+    const status = document.getElementById("studentLoadStatus");
+    if (status) status.remove();
     container.insertAdjacentHTML("afterbegin",
-      '<div id="studentLoadStatus" style="margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:13px;">Memuat semula data terkini...</div>');
-  } else {
-    container.innerHTML = '<div id="studentLoadStatus" class="card empty">Menghubungi Google Apps Script untuk memuatkan data murid...</div>';
+      '<div id="studentLoadStatus" style="margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:13px;">Data murid dimuatkan daripada simpanan peranti. Tekan SEGARKAN DATA MURID jika helaian telah berubah.</div>');
+    return; // No Google Sheets/API request when a local student cache exists.
+  }
+
+  container.innerHTML = '<div id="studentLoadStatus" class="card empty">Memuatkan data murid buat kali pertama...</div>';
+  forceRefreshStudentData({ silent: true, initialLoad: true });
+}
+
+/**
+ * Explicitly synchronize the persistent browser cache with the authoritative
+ * Data Murid sheet. This is called manually by the user or after a mutation.
+ */
+function forceRefreshStudentData(options) {
+  options = options || {};
+  const button = document.getElementById("syncStudentDataButton");
+  const container = document.getElementById("studentList");
+  const statusId = "studentLoadStatus";
+  let status = document.getElementById(statusId);
+
+  if (!options.silent && button) {
+    button.disabled = true;
+    button.dataset.oldText = button.textContent;
+    button.textContent = "⏳ MENYEGARKAN...";
+  }
+  if (container && !status) {
+    container.insertAdjacentHTML("afterbegin",
+      '<div id="studentLoadStatus" style="margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#eff6ff;color:#1d4ed8;font-size:13px;">Menyegerakkan data murid daripada Google Sheets...</div>');
+    status = document.getElementById(statusId);
+  } else if (status) {
+    status.textContent = "Menyegerakkan data murid daripada Google Sheets...";
   }
 
   let settled = false;
-  const finishStatus = function(message, isError) {
-    const status = document.getElementById("studentLoadStatus");
-    if (!status) return;
-    status.style.cssText = "margin:0 0 10px;padding:8px 10px;border-radius:8px;font-size:13px;" +
-      (isError ? "background:#fee2e2;color:#991b1b;" : "background:#dcfce7;color:#166534;");
-    status.textContent = message;
-  };
-
-  // Guard against a network callback that never returns.
   const watchdog = setTimeout(function() {
     if (settled) return;
     settled = true;
-    finishStatus("Sambungan mengambil masa terlalu lama. Semak deployment Web App Apps Script dan cuba MUAT SEMULA.", true);
-    if (!allStudents.length) {
-      container.insertAdjacentHTML("beforeend", '<div style="padding:10px;color:#991b1b;font-size:13px;">Data belum diterima daripada Apps Script. Pastikan Web App dideploy sebagai versi terkini dan akses ditetapkan dengan betul.</div>');
-    }
+    finish(false, "Sambungan mengambil masa terlalu lama. Data simpanan peranti dikekalkan.");
   }, 25000);
+
+  function finish(success, message) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = button.dataset.oldText || "↻ SEGARKAN DATA MURID";
+    }
+    const node = document.getElementById(statusId);
+    if (node) {
+      node.style.cssText = "margin:0 0 10px;padding:8px 10px;border-radius:8px;font-size:13px;" +
+        (success ? "background:#dcfce7;color:#166534;" : "background:#fee2e2;color:#991b1b;");
+      node.textContent = message;
+      if (success) setTimeout(function() { const n = document.getElementById(statusId); if (n && n.textContent === message) n.remove(); }, 6000);
+    }
+  }
 
   callSATS(SATS_API + "?action=getStudents", function(data) {
     if (settled) return;
     settled = true;
     clearTimeout(watchdog);
-
     if (!data || data.success !== true || !Array.isArray(data.students)) {
-      const message = data && data.message ? data.message : "Apps Script tidak memulangkan senarai murid.";
-      finishStatus("Gagal memuatkan data murid: " + message, true);
-      console.error("SATS getStudents failed", data);
+      finish(false, "Gagal menyegerakkan data. Simpanan sedia ada tidak dipadamkan.");
+      console.error("SATS student sync failed", data);
       return;
     }
 
@@ -6013,22 +6059,27 @@ function loadStudents() {
         profile: String(item.profile || item.photo || "").trim(),
         file: String(item.file || "").trim()
       };
-    }).filter(function(student) { return !!(student.name && student.className); });
+    }).filter(function(student) { return Boolean(student.id && student.name && student.className); });
 
     applyStudentData(students);
-    allClasses = Array.from(new Set(SATS_DEFAULT_CLASSES.concat(students.map(function(s) { return s.className; }).filter(Boolean))))
-      .sort(function(a,b) { return a.localeCompare(b, undefined, {numeric:true, sensitivity:"base"}); });
+    allClasses = Array.from(new Set(
+      (Array.isArray(SATS_DEFAULT_CLASSES) ? SATS_DEFAULT_CLASSES : []).concat(
+        students.map(function(student) { return student.className; }).filter(Boolean)
+      )
+    )).sort(function(a,b) { return a.localeCompare(b, undefined, {numeric:true, sensitivity:"base"}); });
+    satsStudentsReady = true;
     writeStudentCache(allStudents);
-    populateClassDropdowns();
+    if (typeof populateClassDropdowns === "function") populateClassDropdowns();
     if (typeof populateAllClassSelectors === "function") populateAllClassSelectors();
-    renderStudents(allStudents);
-    updatePrintButton(allStudents.length);
-    finishStatus("Data berjaya dimuatkan: " + allStudents.length + " orang murid.", false);
-    // Hide success banner after a short period, keeping errors visible.
-    setTimeout(function() { const n = document.getElementById("studentLoadStatus"); if (n && n.textContent.indexOf("Data berjaya") === 0) n.remove(); }, 5000);
+    if (container) {
+      renderStudents(allStudents);
+      updatePrintButton(allStudents.length);
+    }
+    if (typeof populateManualClasses === "function") populateManualClasses();
+    if (typeof populateReportClasses === "function") populateReportClasses();
+    finish(true, "Data berjaya disegerakkan dan disimpan pada peranti: " + allStudents.length + " orang murid.");
   });
 }
-
 
 /* =================================================
    KEHADIRAN MANUAL
@@ -6763,9 +6814,8 @@ function saveManualAttendance() {
 const SATS_STUDENT_CACHE_KEY =
   "SATS_STUDENTS_CACHE_V1";
 
-const SATS_STUDENT_CACHE_MAX_AGE =
-  60 * 60 * 1000; // 1 jam
-
+// Cache ini tidak tamat tempoh secara automatik. Pengguna boleh menyegerakkan
+// data secara manual; perubahan murid melalui aplikasi mencetuskan sync selepas simpan.
 
 function readStudentCache() {
 
@@ -7153,10 +7203,10 @@ function parseStudentCsv(text) {
 
 
 function loadStudentsDirectFromSheet(done) {
-  /* CACHE-FIRST STRATEGY:
-   * 1) Return cached data immediately to the current menu.
-   * 2) Refresh the cache in the background through Apps Script.
-   * 3) If no cache exists yet, wait for the first API response.
+  /* PERSISTENT CACHE STRATEGY:
+   * 1) Return the saved browser cache immediately without calling Apps Script.
+   * 2) Sync from Apps Script only if this device has no cached student list.
+   * 3) A user-triggered refresh and successful student mutations update the cache.
    */
   const cached = readStudentCache();
   const cachedStudents = cached && Array.isArray(cached.students)
@@ -7210,15 +7260,16 @@ function loadStudentsDirectFromSheet(done) {
     }
   }
 
-  if (cachedStudents && cachedStudents.length) {
+  if (cachedStudents) {
     applyFreshStudents(cachedStudents);
     if (typeof done === "function") {
       callbackUsed = true;
       done(cachedStudents, null);
     }
+    return; // Persistent cache is the normal source on app open; sync only on request.
   }
 
-  // Apps Script remains the source of truth; cache is only the fast first paint.
+  // First-time setup only: fetch from Apps Script when this device has no cache.
   callSATS(SATS_API + "?action=getStudents", function(data) {
     try {
       const students = normalizeResponse(data);
@@ -8177,6 +8228,58 @@ function saveEditedStudent() {
   );
 }
 
+
+
+function promoteStudentsToNextYearUI() {
+  if (SATS_STUDENT_IMPORT_MODE) {
+    alert("Data murid datang daripada IMPORTRANGE dan tidak boleh diubah melalui fungsi naik tahun SATS.");
+    return;
+  }
+
+  const password = prompt("Masukkan kata laluan untuk proses NAIK TAHUN MURID:");
+  if (password === null) return;
+  if (!String(password).trim()) {
+    alert("Kata laluan diperlukan.");
+    return;
+  }
+
+  const confirmed = confirm(
+    "PENGESAHAN NAIK TAHUN\n\n" +
+    "• Murid Tahun 1 → Tahun 2\n" +
+    "• Murid Tahun 2 → Tahun 3\n" +
+    "• Murid Tahun 3 → Tahun 4\n" +
+    "• Murid Tahun 4 → Tahun 5\n" +
+    "• Murid Tahun 5 → Tahun 6\n" +
+    "• Semua murid Tahun 6 akan dikeluarkan daripada Data Murid.\n\n" +
+    "Rekod kehadiran sejarah tidak dipadam. Pastikan anda telah membuat sandaran Data Murid. Teruskan?"
+  );
+  if (!confirmed) return;
+
+  const button = document.getElementById("promoteStudentsButton");
+  if (button) {
+    button.disabled = true;
+    button.dataset.oldText = button.textContent;
+    button.textContent = "⏳ SEDANG NAIK TAHUN...";
+  }
+
+  const url = SATS_API + "?action=promoteStudents&password=" + encodeURIComponent(password);
+  callSATS(url, function(data) {
+    if (button) {
+      button.disabled = false;
+      button.textContent = button.dataset.oldText || "⬆️ NAIK TAHUN MURID";
+    }
+
+    if (data && data.success) {
+      selectedStudentIds.clear();
+      clearStudentCache();
+      alert("✓ " + (data.message || "Proses naik tahun berjaya."));
+      satsRefreshAfterStudentMutation();
+      if (typeof loadDashboard === "function") loadDashboard();
+    } else {
+      alert("✕ " + ((data && data.message) || "Proses naik tahun gagal. Tiada pengesahan kejayaan diterima."));
+    }
+  });
+}
 
 
 function deleteSelectedStudentsBulk() {
@@ -11668,7 +11771,8 @@ function deleteClassSetting(
 <script id="sats-auto-refresh-after-mutation">
 function satsRefreshAfterStudentMutation() {
   try {
-    if (typeof loadStudents === "function") loadStudents();
+    if (typeof forceRefreshStudentData === "function") forceRefreshStudentData({ silent: true });
+    else if (typeof loadStudents === "function") loadStudents();
     const dashboardPage = document.getElementById("dashboard");
     if (typeof loadDashboard === "function" && dashboardPage && dashboardPage.classList.contains("active")) loadDashboard();
     if (typeof loadAtRiskStudents === "function") {
