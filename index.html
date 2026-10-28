@@ -2048,16 +2048,35 @@ body{
 <style id="sats-manual-mobile-ui">
 #manualAttendanceMobileBar{display:none}
 @media(max-width:768px){
-  body.sats-manual-mobile-active{padding-bottom:104px!important}
-  #manualAttendanceCard .report-section-header{align-items:flex-start;gap:12px;flex-direction:column}
-  #manualAttendanceCard .report-section-header>div:last-child{width:100%;justify-content:stretch!important}
-  #manualAttendanceCard .report-section-header>div:last-child button{flex:1;min-height:44px}
-  #manualAttendanceCard .report-table{min-width:760px}
-  #manualAttendanceCard .report-table td,#manualAttendanceCard .report-table th{padding:9px 8px}
-  #manualAttendanceCard .form-input{min-height:42px;font-size:16px}
-  #manualAttendanceMobileBar{display:none;position:fixed;z-index:9998;left:0;right:0;bottom:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.97);border-top:1px solid #cbd5e1;box-shadow:0 -5px 20px rgba(15,23,42,.12);gap:10px;align-items:center}
+  body.sats-manual-mobile-active{padding-bottom:100px!important}
+  #manualAttendanceCard{padding:12px!important;border-radius:14px}
+  #manualAttendanceCard .report-section-header{align-items:stretch;gap:10px;flex-direction:column;margin-bottom:12px}
+  #manualAttendanceCard .report-section-title{font-size:17px}
+  #manualAttendanceCard .report-section-subtitle{font-size:12px;line-height:1.4}
+  #manualAttendanceCard .report-section-header>div:last-child{width:100%;display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important}
+  #manualAttendanceCard .report-section-header>div:last-child button{min-height:42px;font-size:12px;padding:8px 6px}
+  #manualAttendanceCard .report-section-header>div:last-child button[onclick="saveManualAttendance()"]{display:none}
+  #manualAttendanceCard .report-section-header>div:last-child button[onclick="markAllManualPresent()"]{grid-column:1/-1}
+  #manualAttendanceCard>div[style*="overflow-x:auto"]{overflow:visible!important}
+  #manualAttendanceCard .report-table{width:100%;min-width:0!important;border:0;border-collapse:separate;border-spacing:0 10px;font-size:14px}
+  #manualAttendanceCard .report-table thead{display:none}
+  #manualAttendanceCard .report-table tbody{display:block;width:100%}
+  #manualAttendanceCard .report-table tbody tr[data-student-id]{display:grid;grid-template-columns:1fr 1fr;gap:0 10px;padding:11px 12px;margin:0 0 10px;background:#fff;border:1px solid #e2e8f0;border-radius:13px;box-shadow:0 2px 7px rgba(15,23,42,.045)}
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td{display:block;min-width:0;padding:5px 0;border:0;white-space:normal;text-align:left}
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td:before{display:block;margin-bottom:4px;font-size:10px;line-height:1.2;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:#64748b;content:attr(data-label)}
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Bil"],
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Kelas"],
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Kaedah"]{display:none}
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Murid"]{grid-column:1/-1;padding:0 0 9px;margin-bottom:5px;border-bottom:1px solid #f1f5f9;font-size:15px}
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Murid"]:before{content:none}
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Status"]{grid-column:1/-1}
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Alasan"]{grid-column:1/-1}
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Catatan"]{grid-column:1/-1}
+  #manualAttendanceCard .report-table tbody tr[data-student-id] td[data-label="Status"] select{font-weight:700}
+  #manualAttendanceCard .form-input,#manualAttendanceCard select{width:100%;box-sizing:border-box;min-height:43px;font-size:16px;border-radius:9px;padding:8px 10px}
+  #manualAttendanceMobileBar{display:none;position:fixed;z-index:9998;left:0;right:0;bottom:0;padding:9px 12px calc(9px + env(safe-area-inset-bottom));background:rgba(255,255,255,.98);border-top:1px solid #cbd5e1;box-shadow:0 -5px 20px rgba(15,23,42,.12);gap:10px;align-items:center;backdrop-filter:blur(8px)}
   #manualAttendanceMobileBar.is-visible{display:flex}
-  #manualAttendanceMobileBar .manual-mobile-info{flex:1;min-width:0;font-size:12px;line-height:1.35;color:#475569}
+  #manualAttendanceMobileBar .manual-mobile-info{flex:1;min-width:0;font-size:11px;line-height:1.35;color:#475569}
   #manualAttendanceMobileBar .manual-mobile-info strong{display:block;font-size:13px;color:#0f172a}
   #manualAttendanceMobileSave{min-height:48px;padding:0 18px;border:0;border-radius:10px;background:#15803d;color:#fff;font-weight:800;font-size:14px;white-space:nowrap;box-shadow:0 2px 5px rgba(21,128,61,.22)}
   #manualAttendanceMobileSave:disabled{opacity:.55}
@@ -6151,7 +6170,7 @@ function forceRefreshStudentData(options) {
       )
     )).sort(function(a,b) { return a.localeCompare(b, undefined, {numeric:true, sensitivity:"base"}); });
     satsStudentsReady = true;
-    writeStudentCache(allStudents);
+    writeStudentCache(allStudents, data.version || "");
     if (typeof populateClassDropdowns === "function") populateClassDropdowns();
     if (typeof populateAllClassSelectors === "function") populateAllClassSelectors();
     if (container) {
@@ -6161,6 +6180,17 @@ function forceRefreshStudentData(options) {
     if (typeof populateManualClasses === "function") populateManualClasses();
     if (typeof populateReportClasses === "function") populateReportClasses();
     finish(true, "Data berjaya disegerakkan dan disimpan pada peranti: " + allStudents.length + " orang murid.");
+    if (options.reloadManualAttendance) {
+      const manualCard = document.getElementById("manualAttendanceCard");
+      if (manualCard && manualCard.style.display !== "none" && typeof loadManualAttendance === "function") {
+        if (typeof manualAttendanceHasUnsavedChanges !== "function" || !manualAttendanceHasUnsavedChanges()) {
+          loadManualAttendance();
+        } else {
+          const notice = document.getElementById("manualCalendarStatus");
+          if (notice) notice.innerHTML = '<div style="padding:8px 10px;border-radius:8px;background:#fef3c7;color:#92400e;font-size:12px;">Data murid telah dikemas kini oleh guru lain. Simpan perubahan kehadiran anda dahulu, kemudian tekan PAPAR SENARAI MURID untuk memuatkan senarai terkini.</div>';
+        }
+      }
+    }
   });
 }
 
@@ -6546,7 +6576,7 @@ function loadManualAttendance() {
         return;
       }
 
-      statusBox.innerHTML = '<div style="padding:10px;border-radius:8px;background:#dcfce7;color:#166534;">🟢 Hari Persekolahan — rekod kehadiran telah dimuatkan.</div>';
+      statusBox.innerHTML = '<div style="padding:7px 10px;border-radius:8px;background:#dcfce7;color:#166534;font-size:12px;font-weight:700;">✓ Rekod kehadiran dimuatkan · Hari persekolahan</div>';
       const attendanceMap = {};
       (Array.isArray(data.students) ? data.students : []).forEach(function(item) {
         const id = String(item.id || "").trim();
@@ -6607,6 +6637,8 @@ function updateManualAttendanceMobileBar() {
   const rows = Array.from(document.querySelectorAll('#manualAttendanceBody tr[data-student-id]'));
   let dirty = 0;
   rows.forEach(function(row) {
+    const reasonCell = row.querySelector('.manual-reason') ? row.querySelector('.manual-reason').closest('td') : null;
+    if (reasonCell && !mobile) reasonCell.style.display = '';
     if (row.dataset.locked === '1') return;
     const status = row.querySelector('.manual-status');
     const reason = row.querySelector('.manual-reason');
@@ -6655,21 +6687,21 @@ function renderManualAttendance(
         (locked ? "1" : "0") +
         '">' +
 
-        "<td>" +
+        '<td data-label="Bil">' +
         (index + 1) +
         "</td>" +
 
-        "<td><strong>" +
+        '<td data-label="Murid"><strong>' +
         escapeHtml(student.name) +
         "</strong><br><small>" +
         escapeHtml(student.id) +
         "</small></td>" +
 
-        "<td>" +
+        '<td data-label="Kelas">' +
         escapeHtml(student.className) +
         "</td>" +
 
-        "<td>" +
+        '<td data-label="Status">' +
         manualStatusOptions(
           (
             student.status === "Hadir" ||
@@ -6681,7 +6713,7 @@ function renderManualAttendance(
         ) +
         "</td>" +
 
-        "<td>" +
+        '<td data-label="Kaedah">' +
         (
           locked
             ? "📷 QR"
@@ -6689,14 +6721,14 @@ function renderManualAttendance(
         ) +
         "</td>" +
 
-        "<td>" +
+        '<td data-label="Alasan">' +
         manualReasonOptions(
           student.reason || "",
           locked
         ) +
         "</td>" +
 
-        "<td>" +
+        '<td data-label="Catatan">' +
         '<input class="form-input manual-note" ' +
         'placeholder="Catatan (pilihan)" ' +
         (locked ? "disabled" : "") +
@@ -6730,13 +6762,14 @@ function renderManualAttendance(
           select.value ===
           "Tidak Hadir"
         ) {
-          reason.disabled =
-            false;
+          reason.disabled = false;
         } else {
-          reason.value =
-            "";
-          reason.disabled =
-            true;
+          reason.value = "";
+          reason.disabled = true;
+        }
+        const reasonCell = reason ? reason.closest("td") : null;
+        if (reasonCell && window.matchMedia && window.matchMedia("(max-width: 768px)").matches) {
+          reasonCell.style.display = select.value === "Tidak Hadir" ? "block" : "none";
         }
 
       }
@@ -6783,6 +6816,19 @@ document.addEventListener('input', function(event) {
   if (event.target && event.target.closest && event.target.closest('#manualAttendanceBody')) updateManualAttendanceMobileBar();
 });
 window.addEventListener('resize', updateManualAttendanceMobileBar);
+
+function manualAttendanceHasUnsavedChanges() {
+  const rows = Array.from(document.querySelectorAll('#manualAttendanceBody tr[data-student-id]'));
+  return rows.some(function(row) {
+    if (row.dataset.locked === '1') return false;
+    const status = row.querySelector('.manual-status');
+    const reason = row.querySelector('.manual-reason');
+    const note = row.querySelector('.manual-note');
+    return (status && status.value !== (row.dataset.originalStatus || '')) ||
+      (reason && reason.value !== (row.dataset.originalReason || '')) ||
+      (note && note.value !== (row.dataset.originalNote || ''));
+  });
+}
 
 function saveManualAttendance() {
   if (manualAttendanceSaving) return;
@@ -6943,7 +6989,8 @@ function readStudentCache() {
 
 
 function writeStudentCache(
-  students
+  students,
+  serverVersion
 ) {
 
   try {
@@ -6951,11 +6998,9 @@ function writeStudentCache(
     localStorage.setItem(
       SATS_STUDENT_CACHE_KEY,
       JSON.stringify({
-        timestamp:
-          Date.now(),
-
-        students:
-          students
+        timestamp: Date.now(),
+        serverVersion: String(serverVersion || (readStudentCache() || {}).serverVersion || ""),
+        students: students
       })
     );
 
@@ -6969,6 +7014,41 @@ function writeStudentCache(
   }
 
 }
+
+
+let satsStudentVersionCheckRunning = false;
+function checkStudentDataVersion() {
+  if (satsStudentVersionCheckRunning || !readStudentCache()) return;
+  satsStudentVersionCheckRunning = true;
+  callSATS(SATS_API + "?action=getStudentDataVersion", function(data) {
+    satsStudentVersionCheckRunning = false;
+    if (!data || data.success !== true || !data.version) return;
+    const cached = readStudentCache();
+    if (!cached) return;
+    const knownVersion = String(cached.serverVersion || "");
+    const currentVersion = String(data.version || "");
+    if (!knownVersion) {
+      // Legacy cache has no server version; perform one full sync so it cannot
+      // remain stale after another teacher edited Data Murid.
+      window.satsStudentServerVersion = currentVersion;
+      forceRefreshStudentData({ silent: true, reloadManualAttendance: true });
+      return;
+    }
+    if (knownVersion !== currentVersion) {
+      window.satsStudentServerVersion = currentVersion;
+      forceRefreshStudentData({ silent: true });
+    }
+  });
+}
+
+// Poll only the tiny version token; download student rows only when another
+// teacher changes Data Murid. Also check when a teacher returns to the app.
+setTimeout(checkStudentDataVersion, 5000);
+setInterval(checkStudentDataVersion, 60000);
+document.addEventListener("visibilitychange", function() {
+  if (document.visibilityState === "visible") checkStudentDataVersion();
+});
+window.addEventListener("focus", checkStudentDataVersion);
 
 
 function applyStudentData(
@@ -7115,9 +7195,10 @@ function refreshStudentsInBackground() {
       applyStudentData(
         data.students
       );
-
+      window.satsStudentServerVersion = String(data.version || window.satsStudentServerVersion || "");
       writeStudentCache(
-        allStudents
+        allStudents,
+        data.version || ""
       );
 
       console.log(
@@ -7335,7 +7416,7 @@ function loadStudentsDirectFromSheet(done) {
       )
     )).sort(function(a,b) { return a.localeCompare(b, undefined, {numeric:true, sensitivity:"base"}); });
     satsStudentsReady = true;
-    writeStudentCache(students);
+    writeStudentCache(students, window.satsStudentServerVersion || "");
     if (typeof populateClassDropdowns === "function") populateClassDropdowns();
     if (typeof populateAllClassSelectors === "function") populateAllClassSelectors();
     // Keep the student management list fresh if it is currently visible.
@@ -7359,6 +7440,7 @@ function loadStudentsDirectFromSheet(done) {
   callSATS(SATS_API + "?action=getStudents", function(data) {
     try {
       const students = normalizeResponse(data);
+      window.satsStudentServerVersion = String(data.version || "");
       applyFreshStudents(students);
       if (!callbackUsed && typeof done === "function") {
         callbackUsed = true;
@@ -8712,11 +8794,11 @@ function renderAtRiskStudents(data) {
       return (
         "<tr>" +
 
-        "<td>" +
+        '<td data-label="Bil">' +
         (index + 1) +
         "</td>" +
 
-        "<td><strong>" +
+        '<td data-label="Murid"><strong>' +
         escapeHtml(student.name) +
         "</strong><br><small>" +
         escapeHtml(student.id) +
