@@ -2552,6 +2552,23 @@ body{
         </button>
       </div>
 
+      <div style="grid-column:1 / -1;position:relative;">
+        <label for="manualStudentSearch">Cari nama murid (taip sebahagian atau nama penuh)</label>
+        <input
+          id="manualStudentSearch"
+          type="search"
+          class="form-input"
+          placeholder="Contoh: Ahmad atau Nur Aina"
+          autocomplete="off"
+          oninput="searchManualStudents()"
+          onkeydown="handleManualStudentSearchKeydown(event)"
+          aria-autocomplete="list"
+          aria-controls="manualStudentSuggestions"
+        >
+        <div id="manualStudentSuggestions" role="listbox" style="display:none;position:absolute;z-index:1000;top:100%;left:0;right:0;max-height:260px;overflow-y:auto;background:#fff;border:1px solid #cbd5e1;border-radius:8px;box-shadow:0 8px 20px rgba(15,23,42,.14);"></div>
+        <small style="display:block;margin-top:5px;color:#64748b;">Pilih nama daripada cadangan untuk memilih kelas dan mencari murid dalam senarai kehadiran. Senarai kelas penuh kekal dipaparkan.</small>
+      </div>
+
     </div>
 
     <div
@@ -6150,6 +6167,117 @@ function getTodayDateInput() {
 }
 
 
+let manualSelectedStudentId = "";
+let manualSearchMatches = [];
+let manualSearchActiveIndex = -1;
+
+function normalizeManualSearchText(value) {
+  return String(value || "").toLocaleLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function searchManualStudents() {
+  const input = document.getElementById("manualStudentSearch");
+  const box = document.getElementById("manualStudentSuggestions");
+  if (!input || !box) return;
+  const query = normalizeManualSearchText(input.value);
+  manualSearchMatches = [];
+  manualSearchActiveIndex = -1;
+  if (query.length < 1) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    return;
+  }
+
+  const source = Array.isArray(allStudents) && allStudents.length ? allStudents : [];
+  manualSearchMatches = source.filter(function(student) {
+    return normalizeManualSearchText(student.name).includes(query);
+  }).sort(function(a, b) {
+    const an = normalizeManualSearchText(a.name);
+    const bn = normalizeManualSearchText(b.name);
+    const aStarts = an.startsWith(query) ? 0 : 1;
+    const bStarts = bn.startsWith(query) ? 0 : 1;
+    return aStarts - bStarts || an.localeCompare(bn);
+  }).slice(0, 12);
+
+  if (!manualSearchMatches.length) {
+    box.innerHTML = '<div style="padding:11px 12px;color:#64748b;">Tiada nama murid yang sepadan.</div>';
+    box.style.display = "block";
+    return;
+  }
+
+  box.innerHTML = manualSearchMatches.map(function(student, index) {
+    return '<button type="button" role="option" aria-selected="false" data-manual-search-index="' + index + '" ' +
+      'style="display:block;width:100%;padding:10px 12px;text-align:left;border:0;border-bottom:1px solid #e2e8f0;background:#fff;cursor:pointer;color:#0f172a;" ' +
+      'onmouseenter="manualSearchActiveIndex=' + index + ';highlightManualSearchOption();" ' +
+      'onclick="selectManualStudentSuggestion(' + index + ')">' +
+      '<strong>' + escapeHtml(student.name) + '</strong>' +
+      '<span style="display:block;font-size:12px;color:#64748b;">' + escapeHtml(student.className) + ' · ID: ' + escapeHtml(student.id) + '</span>' +
+      '</button>';
+  }).join("");
+  box.style.display = "block";
+}
+
+function highlightManualSearchOption() {
+  const box = document.getElementById("manualStudentSuggestions");
+  if (!box) return;
+  box.querySelectorAll('[data-manual-search-index]').forEach(function(option, index) {
+    const active = index === manualSearchActiveIndex;
+    option.style.background = active ? "#dbeafe" : "#fff";
+    option.setAttribute("aria-selected", active ? "true" : "false");
+  });
+}
+
+function handleManualStudentSearchKeydown(event) {
+  const box = document.getElementById("manualStudentSuggestions");
+  if (!box || box.style.display === "none" || !manualSearchMatches.length) return;
+  if (event.key === "ArrowDown") {
+    event.preventDefault();
+    manualSearchActiveIndex = (manualSearchActiveIndex + 1) % manualSearchMatches.length;
+    highlightManualSearchOption();
+  } else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    manualSearchActiveIndex = manualSearchActiveIndex <= 0 ? manualSearchMatches.length - 1 : manualSearchActiveIndex - 1;
+    highlightManualSearchOption();
+  } else if (event.key === "Enter" && manualSearchActiveIndex >= 0) {
+    event.preventDefault();
+    selectManualStudentSuggestion(manualSearchActiveIndex);
+  } else if (event.key === "Escape") {
+    box.style.display = "none";
+  }
+}
+
+function selectManualStudentSuggestion(index) {
+  const student = manualSearchMatches[index];
+  if (!student) return;
+  const input = document.getElementById("manualStudentSearch");
+  const box = document.getElementById("manualStudentSuggestions");
+  const classSelect = document.getElementById("manualClass");
+  if (input) input.value = student.name;
+  if (box) box.style.display = "none";
+  manualSelectedStudentId = String(student.id || "").trim();
+  if (classSelect) classSelect.value = student.className;
+  if (!document.getElementById("manualDate").value) {
+    document.getElementById("manualDate").value = getTodayDateInput();
+  }
+  loadManualAttendance();
+}
+
+function highlightSelectedManualStudent() {
+  const selectedId = String(manualSelectedStudentId || "").trim();
+  if (!selectedId) return;
+  const body = document.getElementById("manualAttendanceBody");
+  if (!body) return;
+  const row = Array.from(body.querySelectorAll('tr[data-student-id]')).find(function(item) {
+    return String(item.getAttribute("data-student-id") || "").trim() === selectedId;
+  });
+  if (row) {
+    row.style.outline = "2px solid #2563eb";
+    row.style.outlineOffset = "-2px";
+    row.style.background = "#eff6ff";
+    row.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+}
+
 function prepareManualAttendancePage() {
 
   const date =
@@ -6338,7 +6466,8 @@ function loadManualAttendance() {
 
   /* Cached student list is returned synchronously on normal app openings.
      Render names first, then fetch only the date/class attendance state. */
-  loadStudentsDirectFromSheet(function(students, studentError) {
+  const cachedStudents = Array.isArray(allStudents) && allStudents.length ? allStudents : null;
+  const handleStudents = function(students, studentError) {
     if (!Array.isArray(students) || !students.length) {
       body.innerHTML = '<tr><td colspan="7" style="padding:15px;text-align:center;color:#991b1b;">' +
         escapeHtml(studentError && studentError.message ? studentError.message : "Data murid belum tersedia. Sila segarkan Data Murid.") + '</td></tr>';
@@ -6368,6 +6497,7 @@ function loadManualAttendance() {
       };
     });
     renderManualAttendance(initialRows);
+    highlightSelectedManualStudent();
     setManualAttendanceLoading(true);
 
     callSATS(SATS_API + "?action=getManualAttendance&date=" + encodeURIComponent(date) +
@@ -6407,8 +6537,15 @@ function loadManualAttendance() {
         };
       });
       renderManualAttendance(merged);
+      highlightSelectedManualStudent();
     });
-  });
+  };
+
+  if (cachedStudents) {
+    handleStudents(cachedStudents, null);
+  } else {
+    loadStudentsDirectFromSheet(handleStudents);
+  }
 }
 
 
