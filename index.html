@@ -2044,6 +2044,26 @@ body{
 
 
 
+
+<style id="sats-manual-mobile-ui">
+#manualAttendanceMobileBar{display:none}
+@media(max-width:768px){
+  body.sats-manual-mobile-active{padding-bottom:104px!important}
+  #manualAttendanceCard .report-section-header{align-items:flex-start;gap:12px;flex-direction:column}
+  #manualAttendanceCard .report-section-header>div:last-child{width:100%;justify-content:stretch!important}
+  #manualAttendanceCard .report-section-header>div:last-child button{flex:1;min-height:44px}
+  #manualAttendanceCard .report-table{min-width:760px}
+  #manualAttendanceCard .report-table td,#manualAttendanceCard .report-table th{padding:9px 8px}
+  #manualAttendanceCard .form-input{min-height:42px;font-size:16px}
+  #manualAttendanceMobileBar{display:none;position:fixed;z-index:9998;left:0;right:0;bottom:0;padding:10px 12px calc(10px + env(safe-area-inset-bottom));background:rgba(255,255,255,.97);border-top:1px solid #cbd5e1;box-shadow:0 -5px 20px rgba(15,23,42,.12);gap:10px;align-items:center}
+  #manualAttendanceMobileBar.is-visible{display:flex}
+  #manualAttendanceMobileBar .manual-mobile-info{flex:1;min-width:0;font-size:12px;line-height:1.35;color:#475569}
+  #manualAttendanceMobileBar .manual-mobile-info strong{display:block;font-size:13px;color:#0f172a}
+  #manualAttendanceMobileSave{min-height:48px;padding:0 18px;border:0;border-radius:10px;background:#15803d;color:#fff;font-weight:800;font-size:14px;white-space:nowrap;box-shadow:0 2px 5px rgba(21,128,61,.22)}
+  #manualAttendanceMobileSave:disabled{opacity:.55}
+}
+</style>
+
 </head>
 
 
@@ -2645,6 +2665,14 @@ body{
 
     </div>
 
+  </div>
+
+  <div id="manualAttendanceMobileBar" aria-live="polite">
+    <div class="manual-mobile-info">
+      <strong id="manualAttendanceMobileCount">Kehadiran manual</strong>
+      <span id="manualAttendanceMobileHint">Butang simpan sentiasa tersedia</span>
+    </div>
+    <button id="manualAttendanceMobileSave" type="button" onclick="saveManualAttendance()">💾 SIMPAN</button>
   </div>
 
 </section>
@@ -6514,6 +6542,7 @@ function loadManualAttendance() {
         statusBox.innerHTML = '<div style="padding:10px;border-radius:8px;background:#fef3c7;color:#92400e;">🏖️ Tarikh ini bukan hari persekolahan. ' +
           escapeHtml(data.calendarDescription || data.calendarStatus || "") + '</div>';
         card.style.display = "none";
+        updateManualAttendanceMobileBar();
         return;
       }
 
@@ -6548,6 +6577,51 @@ function loadManualAttendance() {
   }
 }
 
+
+let manualAttendanceSaving = false;
+
+function setManualAttendanceBaseline() {
+  const body = document.getElementById("manualAttendanceBody");
+  if (!body) return;
+  body.querySelectorAll('tr[data-student-id]').forEach(function(row) {
+    const status = row.querySelector('.manual-status');
+    const reason = row.querySelector('.manual-reason');
+    const note = row.querySelector('.manual-note');
+    row.dataset.originalStatus = status ? status.value : '';
+    row.dataset.originalReason = reason ? reason.value : '';
+    row.dataset.originalNote = note ? note.value : '';
+  });
+  updateManualAttendanceMobileBar();
+}
+
+function updateManualAttendanceMobileBar() {
+  const card = document.getElementById('manualAttendanceCard');
+  const bar = document.getElementById('manualAttendanceMobileBar');
+  const count = document.getElementById('manualAttendanceMobileCount');
+  const hint = document.getElementById('manualAttendanceMobileHint');
+  const save = document.getElementById('manualAttendanceMobileSave');
+  const visible = !!(card && card.style.display !== 'none' && card.offsetHeight > 0);
+  const mobile = window.matchMedia && window.matchMedia('(max-width: 768px)').matches;
+  if (bar) bar.classList.toggle('is-visible', visible && mobile);
+  document.body.classList.toggle('sats-manual-mobile-active', visible && mobile);
+  const rows = Array.from(document.querySelectorAll('#manualAttendanceBody tr[data-student-id]'));
+  let dirty = 0;
+  rows.forEach(function(row) {
+    if (row.dataset.locked === '1') return;
+    const status = row.querySelector('.manual-status');
+    const reason = row.querySelector('.manual-reason');
+    const note = row.querySelector('.manual-note');
+    if ((status && status.value !== (row.dataset.originalStatus || '')) ||
+        (reason && reason.value !== (row.dataset.originalReason || '')) ||
+        (note && note.value !== (row.dataset.originalNote || ''))) dirty++;
+  });
+  if (count) count.textContent = dirty ? dirty + ' perubahan belum disimpan' : 'Kehadiran manual';
+  if (hint) hint.textContent = dirty ? 'Simpan sebelum keluar dari halaman ini' : 'Butang simpan sentiasa tersedia';
+  if (save) {
+    save.disabled = manualAttendanceSaving;
+    save.textContent = manualAttendanceSaving ? 'MENYIMPAN…' : '💾 SIMPAN';
+  }
+}
 
 function renderManualAttendance(
   students
@@ -6674,6 +6748,7 @@ function renderManualAttendance(
 
   });
 
+  setManualAttendanceBaseline();
 }
 
 
@@ -6701,7 +6776,16 @@ function markAllManualPresent() {
 }
 
 
+document.addEventListener('change', function(event) {
+  if (event.target && event.target.closest && event.target.closest('#manualAttendanceBody')) updateManualAttendanceMobileBar();
+});
+document.addEventListener('input', function(event) {
+  if (event.target && event.target.closest && event.target.closest('#manualAttendanceBody')) updateManualAttendanceMobileBar();
+});
+window.addEventListener('resize', updateManualAttendanceMobileBar);
+
 function saveManualAttendance() {
+  if (manualAttendanceSaving) return;
 
   const date =
     document.getElementById("manualDate").value;
@@ -6764,6 +6848,11 @@ function saveManualAttendance() {
     return;
   }
 
+  manualAttendanceSaving = true;
+  updateManualAttendanceMobileBar();
+  const desktopSaveButtons = Array.from(document.querySelectorAll('#manualAttendanceCard button[onclick="saveManualAttendance()"]'));
+  desktopSaveButtons.forEach(function(button) { button.disabled = true; button.dataset.oldText = button.textContent; button.textContent = 'MENYIMPAN…'; });
+
   callSATS(
     SATS_API +
     "?action=saveManualAttendanceFast" +
@@ -6777,6 +6866,9 @@ function saveManualAttendance() {
     ),
 
     function(data) {
+      manualAttendanceSaving = false;
+      desktopSaveButtons.forEach(function(button) { button.disabled = false; button.textContent = button.dataset.oldText || '💾 SIMPAN KEHADIRAN'; });
+      updateManualAttendanceMobileBar();
 
       if (!data || !data.success) {
 
