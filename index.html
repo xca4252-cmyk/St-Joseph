@@ -6899,11 +6899,15 @@ function saveManualAttendance() {
 
       // Kembali ke carian selepas satu murid disimpan.
       const searchInput = document.getElementById('manualStudentSearch');
+      const classSelect = document.getElementById('manualClass');
       const suggestionBox = document.getElementById('manualStudentSuggestions');
       const card = document.getElementById('manualAttendanceCard');
       if (card) card.style.display = 'none';
       if (suggestionBox) { suggestionBox.style.display = 'none'; suggestionBox.innerHTML = ''; }
-      if (searchInput) { searchInput.value = ''; searchInput.focus(); }
+      // Reset nama dan kelas supaya carian seterusnya bermula dari keadaan kosong.
+      if (searchInput) searchInput.value = '';
+      if (classSelect) classSelect.value = '';
+      if (searchInput) searchInput.focus();
       manualSelectedStudentId = '';
       manualSearchMatches = [];
       manualSearchActiveIndex = -1;
