@@ -2905,6 +2905,7 @@ body{
       <input id="calendarDescription" class="form-input"
         placeholder="Keterangan, contoh: Kelas Ganti Sabtu / Cuti Sekolah">
 
+      <div id="calendarCacheStatus" class="calendar-status-help">Kalendar disimpan pada peranti ini. Ia tidak dimuat turun semula setiap kali aplikasi dibuka; gunakan MUAT SEMULA atau KEMASKINI KALENDAR RASMI apabila guru mahu menyegerakkan perubahan.</div>
       <div class="calendar-status-help">
         <strong>Keutamaan:</strong> Kalendar rasmi Sabah/KPM → kemudian pengecualian manual sekolah. Rekod manual akan mengatasi status rasmi pada tarikh yang sama.<br>
         <strong>Peraturan lalai:</strong>
@@ -2925,7 +2926,7 @@ body{
             Kelas ganti pada Sabtu boleh ditetapkan sebagai Hari Persekolahan.
           </div>
         </div>
-        <button type="button" class="print-button" onclick="loadSchoolCalendar()">
+        <button type="button" class="print-button" onclick="refreshSchoolCalendarFromServer()">
           🔄 MUAT SEMULA
         </button>
       </div>
@@ -4888,61 +4889,98 @@ function formatReportDate(
 
 let schoolCalendarEntries = [];
 let officialSchoolCalendarEntries = [];
+const SATS_CALENDAR_CACHE_KEY = "SATS_SCHOOL_CALENDAR_CACHE_V1";
 
+function readSchoolCalendarCache() {
+  try {
+    const raw = localStorage.getItem(SATS_CALENDAR_CACHE_KEY);
+    if (!raw) return null;
+    const cache = JSON.parse(raw);
+    if (!cache || !Array.isArray(cache.calendar) || !Array.isArray(cache.officialCalendar)) return null;
+    return cache;
+  } catch (error) {
+    console.warn("School calendar cache read error:", error);
+    return null;
+  }
+}
+
+function writeSchoolCalendarCache(calendar, officialCalendar) {
+  try {
+    localStorage.setItem(SATS_CALENDAR_CACHE_KEY, JSON.stringify({
+      timestamp: Date.now(),
+      calendar: Array.isArray(calendar) ? calendar : [],
+      officialCalendar: Array.isArray(officialCalendar) ? officialCalendar : []
+    }));
+  } catch (error) {
+    console.warn("School calendar cache write error:", error);
+  }
+}
+
+function applySchoolCalendarData(data) {
+  schoolCalendarEntries = Array.isArray(data.calendar) ? data.calendar : [];
+  officialSchoolCalendarEntries = Array.isArray(data.officialCalendar) ? data.officialCalendar : [];
+  writeSchoolCalendarCache(schoolCalendarEntries, officialSchoolCalendarEntries);
+  renderSchoolCalendar();
+}
+
+/*
+ * Normal page opening: render the saved calendar immediately and do not
+ * contact Google Sheets if a cache exists. Only the explicit refresh/update
+ * action below reads the current calendar from the server.
+ */
 function loadSchoolCalendar() {
-
   const body = document.getElementById("schoolCalendarBody");
   if (!body) return;
+  const cached = readSchoolCalendarCache();
+  if (cached) {
+    schoolCalendarEntries = cached.calendar;
+    officialSchoolCalendarEntries = cached.officialCalendar;
+    renderSchoolCalendar();
+    return;
+  }
+  body.innerHTML = '<tr><td colspan="6" style="padding:15px;text-align:center;">Memuatkan kalendar untuk kali pertama...</td></tr>';
+  refreshSchoolCalendarFromServer({ silent: true });
+}
 
-  body.innerHTML =
-    '<tr><td colspan="6" style="padding:15px;text-align:center;">Memuatkan kalendar rasmi Sabah/KPM...</td></tr>';
-
-  // Keep the official calendar available automatically. If 2026 is already present,
-  // the backend safely skips re-importing it.
-  callSATS(
-    SATS_API + "?action=syncOfficialCalendar2026",
-    function(syncData) {
-
-      callSATS(
-        SATS_API + "?action=getSchoolCalendar",
-        function(data) {
-
-          if (!data || !data.success) {
-            body.innerHTML =
-              '<tr><td colspan="6" style="padding:15px;text-align:center;color:#991b1b;">' +
-              escapeHtml((data && data.message) || "Gagal mendapatkan kalendar sekolah.") +
-              '</td></tr>';
-            return;
-          }
-
-          schoolCalendarEntries =
-            Array.isArray(data.calendar) ? data.calendar : [];
-
-          officialSchoolCalendarEntries =
-            Array.isArray(data.officialCalendar) ? data.officialCalendar : [];
-
-          renderSchoolCalendar();
-        }
-      );
+function refreshSchoolCalendarFromServer(options) {
+  options = options || {};
+  const body = document.getElementById("schoolCalendarBody");
+  if (body && !readSchoolCalendarCache()) {
+    body.innerHTML = '<tr><td colspan="6" style="padding:15px;text-align:center;">Memuatkan kalendar...</td></tr>';
+  }
+  callSATS(SATS_API + "?action=getSchoolCalendar", function(data) {
+    if (!data || !data.success || !Array.isArray(data.calendar) || !Array.isArray(data.officialCalendar)) {
+      if (body && !readSchoolCalendarCache()) {
+        body.innerHTML = '<tr><td colspan="6" style="padding:15px;text-align:center;color:#991b1b;">' +
+          escapeHtml((data && data.message) || "Gagal mendapatkan kalendar sekolah.") + '</td></tr>';
+      }
+      if (!options.silent) alert((data && data.message) || "Gagal menyegerakkan kalendar.");
+      return;
     }
-  );
+    applySchoolCalendarData(data);
+    if (!options.silent) {
+      const status = document.getElementById("calendarCacheStatus");
+      if (status) status.textContent = "Kalendar berjaya disegerakkan pada peranti ini.";
+    }
+  });
 }
 
 function syncOfficialCalendar2026() {
-
-  callSATS(
-    SATS_API + "?action=syncOfficialCalendar2026",
-    function(data) {
-
-      if (!data || !data.success) {
-        alert((data && data.message) || "Gagal mengemas kini kalendar rasmi.");
-        return;
-      }
-
-      alert(data.message || "Kalendar rasmi telah dikemas kini.");
-      loadSchoolCalendar();
+  if (!confirm("Kemaskini kalendar rasmi 2026 daripada sistem SATS? Data kalendar pada peranti ini akan diganti dengan data terkini.")) return;
+  callSATS(SATS_API + "?action=syncOfficialCalendar2026", function(data) {
+    if (!data || !data.success) {
+      alert((data && data.message) || "Gagal mengemas kini kalendar rasmi.");
+      return;
     }
-  );
+    callSATS(SATS_API + "?action=getSchoolCalendar", function(calendarData) {
+      if (calendarData && calendarData.success && Array.isArray(calendarData.calendar) && Array.isArray(calendarData.officialCalendar)) {
+        applySchoolCalendarData(calendarData);
+        alert(data.message || "Kalendar rasmi telah dikemas kini dan disimpan pada peranti ini.");
+      } else {
+        alert("Kalendar rasmi dikemas kini pada pelayan, tetapi muat semula data pada peranti gagal. Tekan MUAT SEMULA untuk cuba lagi.");
+      }
+    });
+  });
 }
 
 function renderSchoolCalendar() {
@@ -5078,7 +5116,7 @@ function saveSchoolCalendarEntry() {
     }
 
     cancelSchoolCalendarEdit();
-    loadSchoolCalendar();
+    refreshSchoolCalendarFromServer({ silent: true });
   });
 }
 
@@ -5149,7 +5187,7 @@ function deleteSchoolCalendarEntry(rowNumber) {
         return;
       }
 
-      loadSchoolCalendar();
+      refreshSchoolCalendarFromServer({ silent: true });
     }
   );
 }
@@ -6273,286 +6311,105 @@ function manualReasonOptions(reason, locked) {
 }
 
 
+function setManualAttendanceLoading(isLoading) {
+  const card = document.getElementById("manualAttendanceCard");
+  if (!card) return;
+  card.querySelectorAll("select, input, button").forEach(function(control) {
+    control.disabled = !!isLoading;
+  });
+  card.style.opacity = isLoading ? "0.78" : "1";
+}
+
 function loadManualAttendance() {
-
-  const date =
-    document.getElementById(
-      "manualDate"
-    ).value;
-
-  const className =
-    document.getElementById(
-      "manualClass"
-    ).value;
-
-  const card =
-    document.getElementById(
-      "manualAttendanceCard"
-    );
-
-  const body =
-    document.getElementById(
-      "manualAttendanceBody"
-    );
-
-  const statusBox =
-    document.getElementById(
-      "manualCalendarStatus"
-    );
+  const date = document.getElementById("manualDate").value;
+  const className = document.getElementById("manualClass").value;
+  const card = document.getElementById("manualAttendanceCard");
+  const body = document.getElementById("manualAttendanceBody");
+  const statusBox = document.getElementById("manualCalendarStatus");
 
   if (!date || !className) {
-    alert(
-      "Sila pilih tarikh dan kelas."
-    );
+    alert("Sila pilih tarikh dan kelas.");
     return;
   }
 
-  body.innerHTML =
-    '<tr><td colspan="7" style="padding:15px;text-align:center;">Memuatkan murid daripada Data Murid...</td></tr>';
+  card.style.display = "block";
+  body.innerHTML = '<tr><td colspan="7" style="padding:15px;text-align:center;">Memuatkan nama murid...</td></tr>';
+  statusBox.innerHTML = '<div style="padding:10px;border-radius:8px;background:#eff6ff;color:#1d4ed8;">Nama murid dipaparkan dahulu daripada simpanan peranti. Sedang mendapatkan rekod kehadiran...</div>';
 
-  card.style.display =
-    "block";
-
-  /*
-   * STEP 1:
-   * Get the student list directly from
-   * Google Sheet Data Murid.
-   */
-  loadStudentsDirectFromSheet(
-    function(
-      students,
-      studentError
-    ) {
-
-      if (
-        !Array.isArray(students) ||
-        !students.length
-      ) {
-
-        body.innerHTML =
-          '<tr><td colspan="7" style="padding:15px;text-align:center;color:#991b1b;">' +
-          escapeHtml(
-            studentError &&
-            studentError.message
-              ? studentError.message
-              : "Data Murid tidak dapat dibaca daripada Google Sheet."
-          ) +
-          "</td></tr>";
-
-        return;
-      }
-
-      const classStudents =
-        students.filter(
-          function(student) {
-
-            return (
-              String(
-                student.className || ""
-              ).trim() ===
-              String(
-                className || ""
-              ).trim()
-            );
-
-          }
-        );
-
-      if (!classStudents.length) {
-
-        body.innerHTML =
-          '<tr><td colspan="7" style="padding:15px;text-align:center;">Tiada murid dalam kelas ini.</td></tr>';
-
-        return;
-
-      }
-
-      /*
-       * STEP 2:
-       * Ask SATS only for attendance/calendar
-       * information. Do NOT ask SATS for the
-       * student master list.
-       */
-      callSATS(
-        SATS_API +
-        "?action=getManualAttendance" +
-        "&date=" +
-        encodeURIComponent(date) +
-        "&className=" +
-        encodeURIComponent(className),
-
-        function(data) {
-
-          /*
-           * If SATS attendance endpoint fails,
-           * we still display the real students
-           * from Data Murid so manual attendance
-           * remains usable.
-           */
-          if (
-            !data ||
-            !data.success
-          ) {
-
-            statusBox.innerHTML =
-              '<div style="padding:10px;border-radius:8px;background:#fef3c7;color:#92400e;">' +
-              "⚠️ Data murid berjaya dimuatkan daripada Google Sheet. " +
-              "Rekod kehadiran SATS untuk tarikh ini belum dapat dibaca." +
-              "</div>";
-
-            renderManualAttendance(
-              classStudents.map(
-                function(student) {
-
-                  return {
-                    id:
-                      student.id,
-
-                    name:
-                      student.name,
-
-                    className:
-                      student.className,
-
-                    status:
-                      "Tidak Hadir",
-
-                    reason:
-                      "",
-
-                    note:
-                      "",
-
-                    lockedByQR:
-                      false
-
-                  };
-
-                }
-              )
-            );
-
-            return;
-
-          }
-
-          if (
-            data.schoolDay === false
-          ) {
-
-            statusBox.innerHTML =
-              '<div style="padding:10px;border-radius:8px;background:#fef3c7;color:#92400e;">' +
-              "🏖️ Tarikh ini bukan hari persekolahan. " +
-              escapeHtml(
-                data.calendarDescription ||
-                data.calendarStatus ||
-                ""
-              ) +
-              "</div>";
-
-            card.style.display =
-              "none";
-
-            return;
-
-          }
-
-          statusBox.innerHTML =
-            '<div style="padding:10px;border-radius:8px;background:#dcfce7;color:#166534;">' +
-            "🟢 Hari Persekolahan — boleh mengambil kehadiran secara manual." +
-            "</div>";
-
-          /*
-           * Merge SATS attendance records with
-           * the authoritative Data Murid list.
-           */
-          const attendanceRows =
-            Array.isArray(
-              data.students
-            )
-              ? data.students
-              : [];
-
-          const attendanceMap =
-            {};
-
-          attendanceRows.forEach(
-            function(item) {
-
-              const id =
-                String(
-                  item.id || ""
-                ).trim();
-
-              if (id) {
-                attendanceMap[id] =
-                  item;
-              }
-
-            }
-          );
-
-          const merged =
-            classStudents.map(
-              function(student) {
-
-                const attendance =
-                  attendanceMap[
-                    student.id
-                  ];
-
-                return {
-
-                  id:
-                    student.id,
-
-                  name:
-                    student.name,
-
-                  className:
-                    student.className,
-
-                  status:
-                    attendance &&
-                    attendance.status
-                      ? attendance.status
-                      : "Tidak Hadir",
-
-                  reason:
-                    attendance &&
-                    attendance.reason
-                      ? attendance.reason
-                      : "",
-
-                  note:
-                    attendance &&
-                    attendance.note
-                      ? attendance.note
-                      : "",
-
-                  lockedByQR:
-                    !!(
-                      attendance &&
-                      attendance.lockedByQR
-                    )
-
-                };
-
-              }
-            );
-
-          renderManualAttendance(
-            merged
-          );
-
-        }
-      );
-
+  /* Cached student list is returned synchronously on normal app openings.
+     Render names first, then fetch only the date/class attendance state. */
+  loadStudentsDirectFromSheet(function(students, studentError) {
+    if (!Array.isArray(students) || !students.length) {
+      body.innerHTML = '<tr><td colspan="7" style="padding:15px;text-align:center;color:#991b1b;">' +
+        escapeHtml(studentError && studentError.message ? studentError.message : "Data murid belum tersedia. Sila segarkan Data Murid.") + '</td></tr>';
+      statusBox.innerHTML = '<div style="padding:10px;border-radius:8px;background:#fee2e2;color:#991b1b;">Data murid tidak dapat dimuatkan.</div>';
+      return;
     }
-  );
 
+    const classStudents = students.filter(function(student) {
+      return String(student.className || "").trim() === String(className || "").trim();
+    });
+
+    if (!classStudents.length) {
+      body.innerHTML = '<tr><td colspan="7" style="padding:15px;text-align:center;">Tiada murid dalam kelas ini. Jika data baru diubah, tekan SEGARKAN DATA MURID dahulu.</td></tr>';
+      statusBox.innerHTML = "";
+      return;
+    }
+
+    const initialRows = classStudents.map(function(student) {
+      return {
+        id: student.id,
+        name: student.name,
+        className: student.className,
+        status: "Tidak Hadir",
+        reason: "",
+        note: "",
+        lockedByQR: false
+      };
+    });
+    renderManualAttendance(initialRows);
+    setManualAttendanceLoading(true);
+
+    callSATS(SATS_API + "?action=getManualAttendance&date=" + encodeURIComponent(date) +
+      "&className=" + encodeURIComponent(className), function(data) {
+      setManualAttendanceLoading(false);
+
+      if (!data || !data.success) {
+        statusBox.innerHTML = '<div style="padding:10px;border-radius:8px;background:#fef3c7;color:#92400e;">' +
+          "⚠️ Nama murid telah dipaparkan daripada simpanan peranti, tetapi rekod kehadiran belum dapat dibaca. Semak sambungan dan cuba PAPAR SENARAI MURID sekali lagi." + '</div>';
+        return; // Keep visible cached names; do not replace them with a blank/error state.
+      }
+
+      if (data.schoolDay === false) {
+        statusBox.innerHTML = '<div style="padding:10px;border-radius:8px;background:#fef3c7;color:#92400e;">🏖️ Tarikh ini bukan hari persekolahan. ' +
+          escapeHtml(data.calendarDescription || data.calendarStatus || "") + '</div>';
+        card.style.display = "none";
+        return;
+      }
+
+      statusBox.innerHTML = '<div style="padding:10px;border-radius:8px;background:#dcfce7;color:#166534;">🟢 Hari Persekolahan — rekod kehadiran telah dimuatkan.</div>';
+      const attendanceMap = {};
+      (Array.isArray(data.students) ? data.students : []).forEach(function(item) {
+        const id = String(item.id || "").trim();
+        if (id) attendanceMap[id] = item;
+      });
+
+      const merged = classStudents.map(function(student) {
+        const attendance = attendanceMap[String(student.id || "").trim()];
+        return {
+          id: student.id,
+          name: student.name,
+          className: student.className,
+          status: attendance && attendance.status ? attendance.status : "Tidak Hadir",
+          reason: attendance && attendance.reason ? attendance.reason : "",
+          note: attendance && attendance.note ? attendance.note : "",
+          lockedByQR: !!(attendance && attendance.lockedByQR)
+        };
+      });
+      renderManualAttendance(merged);
+    });
+  });
 }
-
 
 
 function renderManualAttendance(
